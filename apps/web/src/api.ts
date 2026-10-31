@@ -11,6 +11,7 @@ export interface Expense {
   description: string;
   uf: string;
   spentOn: string;
+  source: 'manual' | 'openfinance';
   tax: { federalCents: number; estadualCents: number; municipalCents: number; totalCents: number; ratePct: number; ratesVersion: string };
 }
 export interface Summary {
@@ -20,6 +21,14 @@ export interface Summary {
   totals: { count: number; spentCents: number; taxCents: number; federalCents: number; estadualCents: number; municipalCents: number; effectivePct: number };
   yearToDate: { taxCents: number; spentCents: number };
   byCategory: { category: string; label: string; count: number; spentCents: number; taxCents: number; effectivePct: number }[];
+}
+export interface Connection {
+  id: string;
+  institution: string;
+  status: 'pending' | 'active' | 'rejected' | 'revoked' | 'error';
+  lastSyncAt: string | null;
+  lastError: string | null;
+  createdAt: string;
 }
 export interface History { months: { month: string; spentCents: number; taxCents: number }[] }
 
@@ -136,4 +145,11 @@ export const api = {
     idempotencyKey: string,
   ) => call<{ expense: Expense }>('POST', '/v1/expenses', e, { 'idempotency-key': idempotencyKey }),
   deleteExpense: (id: string) => call<void>('DELETE', `/v1/expenses/${id}`),
+
+  connections: () => call<{ enabled: boolean; connections: Connection[] }>('GET', '/v1/openfinance/connections'),
+  connectBank: () => call<{ connection: Connection; authorizeUrl: string }>('POST', '/v1/openfinance/connections'),
+  finishConnection: (consentId: string, state: string) =>
+    call<{ connection: Connection }>('POST', '/v1/openfinance/connections/callback', { consentId, state }),
+  syncConnection: (id: string) => call<{ queued: boolean }>('POST', `/v1/openfinance/connections/${id}/sync`),
+  disconnect: (id: string) => call<void>('DELETE', `/v1/openfinance/connections/${id}`),
 };

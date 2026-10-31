@@ -16,18 +16,24 @@ import { expenseRoutes } from './routes/expenses.js';
 import { impostometroRoutes } from './routes/impostometro.js';
 import { healthRoutes } from './routes/health.js';
 import { taxRoutes } from './routes/tax.js';
+import { openFinanceRoutes } from './routes/openfinance.js';
+import type { OpenFinanceProvider } from './lib/openfinance-client.js';
+import { createOpenFinanceService } from './services/openfinance.js';
 
 export interface AppDeps {
   config: Config;
   pool: Pool;
   redis: Redis | null;
   rates: TaxRatesTable;
+  /** Provedor Open Finance; null desliga a integração. */
+  provider?: OpenFinanceProvider | null;
 }
 
 declare module 'fastify' {
   interface FastifyInstance {
     deps: AppDeps;
     cache: Cache;
+    ofProvider: OpenFinanceProvider | null;
     authenticate: (req: FastifyRequest) => Promise<void>;
   }
 }
@@ -58,6 +64,18 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
 
   app.decorate('deps', deps);
   app.decorate('cache', new Cache(deps.redis, app.log));
+  app.decorate('ofProvider', deps.provider ?? null);
+  const ofService = deps.provider
+    ? createOpenFinanceService({
+        pool: deps.pool,
+        provider: deps.provider,
+        providerName: config.OPENFINANCE_PROVIDER,
+        rates: deps.rates,
+        cache: app.cache,
+        log: app.log,
+        backfillDays: config.OPENFINANCE_BACKFILL_DAYS,
+      })
+    : null;
 
   app.addHook('onSend', async (req, reply) => {
     reply.header('x-request-id', req.id);
@@ -138,6 +156,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(authRoutes, { prefix: '/v1' });
   await app.register(expenseRoutes, { prefix: '/v1' });
   await app.register(impostometroRoutes, { prefix: '/v1' });
+  await app.register(openFinanceRoutes, { prefix: '/v1', service: ofService });
 
   return app;
 }

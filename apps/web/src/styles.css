@@ -103,3 +103,14 @@ button:disabled { opacity: 0.5; cursor: default; }
 .auth-card { width: min(100%, 380px); display: grid; gap: 1rem; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 1.6rem; }
 
 footer { text-align: center; }
+
+.notice.ok { background: #12301f; border-color: #23613d; color: #a8e6bf; }
+.badge { display: inline-block; font-size: 0.68rem; font-weight: 650; letter-spacing: 0.03em; color: #0f1720; background: var(--fed); border-radius: 6px; padding: 0 0.35rem; margin-right: 0.35rem; }
+.small-btn { padding: 0.45rem 0.8rem; font-size: 0.85rem; }
+.conns li { display: grid; grid-template-columns: auto 1fr auto auto; gap: 0.6rem; align-items: center; padding: 0.6rem 0; border-top: 1px solid var(--line); }
+.conns li:first-child { border-top: 0; }
+.conns .what { display: grid; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+.dot.active { background: var(--mun); box-shadow: 0 0 0 3px #57c79a33; }
+.dot.pending { background: var(--accent); }
+.dot.error { background: var(--danger); }

@@ -168,3 +168,5 @@ export function validateRatesTable(value: unknown): TaxRatesTable {
 export function formatBRL(cents: number): string {
   return (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
+
+export { categoryFromMcc } from './mcc.js';

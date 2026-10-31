@@ -41,12 +41,47 @@ services:
       JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET (32+ caracteres)}
       CORS_ORIGINS: http://localhost:8080
       DB_POOL_MAX: "10"
+      <<: &openfinance
+        OPENFINANCE_PROVIDER: sandbox
+        OPENFINANCE_BASE_URL: http://openfinance-mock:4000
+        OPENFINANCE_API_KEY: sandbox-key
+        OPENFINANCE_WEBHOOK_SECRET: ${OPENFINANCE_WEBHOOK_SECRET:-sandbox-webhook-secret}
+        OPENFINANCE_REDIRECT_URL: http://localhost:8080/openfinance/callback
     depends_on:
       migrate: { condition: service_completed_successfully }
       redis: { condition: service_healthy }
     deploy:
       replicas: 2
     stop_grace_period: 30s
+    restart: unless-stopped
+
+  # Consome a fila: webhooks do Open Finance e sincronizações. Escale à vontade.
+  worker:
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    command: ["node", "apps/api/dist/worker.js"]
+    environment:
+      DATABASE_URL: postgres://openwallet:openwallet@postgres:5432/openwallet
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET (32+ caracteres)}
+      <<: *openfinance
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    deploy:
+      replicas: 2
+    stop_grace_period: 60s
+    restart: unless-stopped
+
+  # Banco simulado (Open Finance). Guarda tudo em memória: use 1 réplica só.
+  openfinance-mock:
+    build: { context: ., dockerfile: apps/openfinance-mock/Dockerfile }
+    ports:
+      - "4000:4000"   # o navegador abre a tela de consentimento aqui
+    environment:
+      PUBLIC_URL: http://localhost:4000
+      SANDBOX_API_KEY: sandbox-key
+      WEBHOOK_URL: http://api:3000/v1/webhooks/openfinance
+      WEBHOOK_SECRET: ${OPENFINANCE_WEBHOOK_SECRET:-sandbox-webhook-secret}
+      SIMULATE_INTERVAL_MS: "30000"
     restart: unless-stopped
 
   web:

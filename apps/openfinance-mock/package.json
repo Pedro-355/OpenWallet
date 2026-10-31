@@ -1,0 +1,22 @@
+{
+  "name": "@openwallet/openfinance-mock",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Banco Sandbox: servidor simulado no estilo Open Finance Brasil (consentimento, cartões, transações) que envia webhooks de novas compras",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "fastify": "^5.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

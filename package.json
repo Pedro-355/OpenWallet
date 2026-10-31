@@ -11,11 +11,13 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "npm run build -w @openwallet/tax && npm run build -w @openwallet/api && npm run build -w @openwallet/web",
+    "build": "npm run build -w @openwallet/tax && npm run build -w @openwallet/api && npm run build -w @openwallet/openfinance-mock && npm run build -w @openwallet/web",
     "typecheck": "npm run build -w @openwallet/tax && npm run typecheck --workspaces --if-present",
     "test": "npm run build -w @openwallet/tax && npm run test --workspaces --if-present",
     "dev:api": "npm run dev -w @openwallet/api",
     "dev:web": "npm run dev -w @openwallet/web",
+    "dev:worker": "npm run dev:worker -w @openwallet/api",
+    "dev:bank": "npm run dev -w @openwallet/openfinance-mock",
     "migrate": "npm run migrate -w @openwallet/api",
     "import:ibpt": "node scripts/import-ibpt.mjs"
   }

@@ -13,16 +13,18 @@ Os percentuais seguem a lógica da tabela IBPT usada nas notas fiscais (Lei 12.7
 packages/tax   cálculo puro (roda no servidor e no navegador) + tabela de alíquotas
 apps/api       API REST — Fastify, PostgreSQL, Redis
 apps/web       tela do impostômetro — React + Vite
+apps/openfinance-mock   Banco Sandbox: Open Finance simulado que envia webhooks de compras
 scripts/       importador das tabelas IBPT
 ```
 
 ## Rodando
 
-**Com Docker (tudo junto, 2 réplicas da API):**
+**Com Docker (tudo junto: 2 réplicas da API, 2 workers, banco simulado):**
 
 ```bash
 JWT_SECRET=$(openssl rand -hex 32) docker compose up --build
-# http://localhost:8080
+# app:            http://localhost:8080
+# Banco Sandbox:  http://localhost:4000 (consentimentos e webhooks enviados)
 ```
 
 **Desenvolvimento:**
@@ -31,9 +33,13 @@ JWT_SECRET=$(openssl rand -hex 32) docker compose up --build
 npm install
 cp apps/api/.env.example apps/api/.env   # ajuste DATABASE_URL / REDIS_URL
 npm run build -w @openwallet/tax
-npm run dev:api    # http://localhost:3000
-npm run dev:web    # http://localhost:5173 (encaminha /api para a API)
+npm run dev:api     # http://localhost:3000
+npm run dev:worker  # processa webhooks e sincronizações
+npm run dev:bank    # Banco Sandbox em http://localhost:4000
+npm run dev:web     # http://localhost:5173 (encaminha /api para a API)
 ```
+
+Para ligar o Open Finance no `.env` da API: `OPENFINANCE_BASE_URL=http://localhost:4000`, `OPENFINANCE_API_KEY=sandbox-key`, `OPENFINANCE_WEBHOOK_SECRET=sandbox-webhook-secret`.
 
 **Testes** (precisam de Postgres em `localhost:5433` e Redis em `localhost:6380`, ou defina `TEST_DATABASE_URL` / `TEST_REDIS_URL`):
 
@@ -52,6 +58,37 @@ imposto = valor pago × (federal% + estadual%[UF] + municipal%) / 100
 - Tudo em **centavos inteiros**. Cada parcela é arredondada e o total é a soma delas, então os números sempre batem.
 - Cada gasto guarda uma **foto** do imposto e da versão da tabela usada (`rates_version`). Se a tabela mudar depois, o histórico não muda.
 - A UF vem do perfil, mas pode ser trocada em cada gasto (compra feita em viagem).
+
+## Open Finance
+
+```
+ App ──1. Conectar banco──▶ API ──cria consentimento──▶ Banco/agregador
+  ◀──2. redireciona para a tela de consentimento do banco──┘
+ usuário autoriza ──3. banco devolve para /openfinance/callback──▶ API confere state + status
+                                                                   └─▶ agenda carga do histórico (90 dias)
+ Banco ──4. webhook "transactions.created" (assinado HMAC)──▶ API: valida, deduplica, enfileira → 202
+                                                    Worker ◀── fila no Postgres (SKIP LOCKED)
+                                                      └─▶ busca transações paginadas → só compras →
+                                                          categoria pelo MCC → imposto → INSERT em lote
+```
+
+- **Só compras viram gastos:** débitos do tipo compra. Pagamento de fatura, crédito e cashback são ignorados. Estorno apaga a compra original.
+- **Categoria pelo MCC** do estabelecimento (`packages/tax/src/mcc.ts`). O usuário pode corrigir no app.
+- **UF:** o Open Finance não informa o estado do estabelecimento, então usamos o do perfil.
+- **Nada duplica:** o evento é deduplicado pelo `eventId` e o gasto pelo `transactionId` do banco. Gasto importado que o usuário apaga não volta (fica uma "lápide").
+- **O webhook só valida e enfileira**, respondendo em milissegundos. Assinatura `x-ow-signature: t=<unix>,v1=<hmac-sha256>`, recusada se tiver mais de 5 min (contra repetição).
+- **Worker separado e escalável:** acorda na hora por `LISTEN/NOTIFY`, tenta de novo com espera exponencial, marca como `dead` depois de 8 falhas e devolve à fila trabalhos de workers que morreram.
+
+**Banco Sandbox (`apps/openfinance-mock`):** segue o formato do Open Finance Brasil (consentimento v3, cartões v2 com `payeeMCC`), tem tela de autorização e gera compras fictícias a cada `SIMULATE_INTERVAL_MS`. Também dá para forçar eventos:
+
+```bash
+curl -X POST localhost:4000/sandbox/purchase -H 'content-type: application/json' \
+  -d '{"consentId":"urn:sandbox:...","amountCents":15000,"mcc":5541,"name":"POSTO TESTE"}'
+curl -X POST localhost:4000/sandbox/reversal -H 'content-type: application/json' \
+  -d '{"consentId":"urn:sandbox:...","transactionId":"..."}'
+```
+
+> O Open Finance Brasil oficial não envia webhooks de transação para quem recebe os dados; isso é feito por agregadores (Pluggy, Belvo...). O sandbox se comporta como um agregador. Para produção, implemente a interface `OpenFinanceProvider` (`apps/api/src/lib/openfinance-client.ts`) com o agregador escolhido e registre em `provider-factory.ts`. O restante (fila, worker, imposto) não muda.
 
 ## Alíquotas (IBPT)
 
@@ -78,6 +115,10 @@ A tabela do IBPT costuma ser atualizada a cada seis meses: repita o processo e f
 | GET | `/v1/impostometro/summary?month=AAAA-MM` | Total do mês, por esfera e por categoria, e acumulado do ano |
 | GET | `/v1/impostometro/history?months=12` | Imposto mês a mês |
 | GET | `/v1/tax/rates` · `/categories` · `/estimate` | Tabela (com ETag), categorias e simulação |
+| GET/POST | `/v1/openfinance/connections` | Lista conexões / inicia consentimento (devolve `authorizeUrl`) |
+| POST | `/v1/openfinance/connections/callback` | Finaliza após o retorno do banco |
+| POST/DELETE | `/v1/openfinance/connections/:id/sync` · `/:id` | Sincroniza agora / desconecta |
+| POST | `/v1/webhooks/openfinance` | Webhook do provedor (assinado) |
 | GET | `/health/live` · `/health/ready` | Liveness e readiness |
 
 ## Decisões para escalar e ficar estável

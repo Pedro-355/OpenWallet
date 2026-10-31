@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { UFS, calculateTax, isUF, type TaxRatesTable } from '@openwallet/tax';
-import { api, auth, ApiError, type Expense, type History, type Summary, type User } from './api';
+import { api, auth, ApiError, type Connection, type Expense, type History, type Summary, type User } from './api';
 import { brl, capitalize, dayLabel, lastDay, monthLong, monthShort, parseMoney, pct, shiftMonth, todayISO } from './format';
 
-export function Impostometro({ user }: { user: User }) {
+export function Impostometro({ user, flash, onFlashSeen }: { user: User; flash?: string; onFlashSeen?: () => void }) {
   const [month, setMonth] = useState(() => todayISO().slice(0, 7));
   const [rates, setRates] = useState<TaxRatesTable | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -12,6 +12,8 @@ export function Impostometro({ user }: { user: User }) {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [ofEnabled, setOfEnabled] = useState(false);
+  const [connections, setConnections] = useState<Connection[]>([]);
 
   useEffect(() => {
     api.rates().then(setRates).catch(() => setError('Não consegui carregar a tabela de impostos.'));
@@ -21,11 +23,14 @@ export function Impostometro({ user }: { user: User }) {
     setLoading(true);
     setError('');
     try {
-      const [s, h, list] = await Promise.all([
+      const [s, h, list, conns] = await Promise.all([
         api.summary(month),
         api.history(6),
         api.expenses(`${month}-01`, lastDay(month)),
+        api.connections().catch(() => ({ enabled: false, connections: [] as Connection[] })),
       ]);
+      setOfEnabled(conns.enabled);
+      setConnections(conns.connections);
       setSummary(s);
       setHistory(h);
       setExpenses(list.items);
@@ -40,6 +45,25 @@ export function Impostometro({ user }: { user: User }) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const hasActive = connections.some((c) => c.status === 'active' || c.status === 'pending');
+  // Com banco conectado, novos gastos chegam sozinhos: atualiza a tela a cada 15 s (só com a aba visível).
+  useEffect(() => {
+    if (!hasActive) return;
+    const t = setInterval(() => {
+      if (document.visibilityState === 'visible') void load();
+    }, 15_000);
+    return () => clearInterval(t);
+  }, [hasActive, load]);
+
+  useEffect(() => {
+    if (!flash) return;
+    const t = setTimeout(() => {
+      onFlashSeen?.();
+      void load();
+    }, 6_000);
+    return () => clearTimeout(t);
+  }, [flash, onFlashSeen, load]);
 
   async function loadMore() {
     if (!nextCursor) return;
@@ -93,6 +117,7 @@ export function Impostometro({ user }: { user: User }) {
         </button>
       </nav>
 
+      {flash && <p className="notice ok">{flash}</p>}
       {summary?.illustrative && (
         <p className="notice">
           Alíquotas ilustrativas: os valores ainda não vieram da tabela oficial do IBPT.
@@ -127,6 +152,8 @@ export function Impostometro({ user }: { user: User }) {
         </section>
       </div>
 
+      {ofEnabled && <BankConnections connections={connections} onChange={load} />}
+
       <section className="card">
         <h2>Por categoria</h2>
         {summary && summary.byCategory.length === 0 && <p className="muted">Nenhum gasto neste mês.</p>}
@@ -157,6 +184,7 @@ export function Impostometro({ user }: { user: User }) {
               <span className="what">
                 <span>{e.description || rates?.categories[e.category]?.label || e.category}</span>
                 <span className="muted small">
+                  {e.source === 'openfinance' && <span className="badge">Banco</span>}
                   {rates?.categories[e.category]?.label ?? e.category} · {e.uf}
                 </span>
               </span>
@@ -183,6 +211,86 @@ export function Impostometro({ user }: { user: User }) {
         Valores aproximados, conforme a Lei 12.741/2012. Fonte das alíquotas: {rates?.source ?? '—'}.
       </footer>
     </div>
+  );
+}
+
+function BankConnections({ connections, onChange }: { connections: Connection[]; onChange: () => Promise<void> }) {
+  const [busy, setBusy] = useState('');
+  const [error, setError] = useState('');
+
+  async function run(key: string, fn: () => Promise<unknown>) {
+    setBusy(key);
+    setError('');
+    try {
+      await fn();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Sem conexão com o servidor.');
+    } finally {
+      setBusy('');
+    }
+  }
+
+  const connect = () =>
+    run('connect', async () => {
+      const { authorizeUrl } = await api.connectBank();
+      window.location.assign(authorizeUrl); // vai para a tela de consentimento do banco
+    });
+
+  const visible = connections.filter((c) => c.status !== 'revoked');
+  const statusLabel: Record<Connection['status'], string> = {
+    active: 'Conectado',
+    pending: 'Aguardando autorização',
+    error: 'Com erro',
+    rejected: 'Recusado',
+    revoked: 'Desconectado',
+  };
+
+  return (
+    <section className="card">
+      <div className="row">
+        <h2>Contas conectadas</h2>
+        <button className="primary small-btn" onClick={() => void connect()} disabled={!!busy}>
+          {busy === 'connect' ? 'Abrindo o banco…' : '+ Conectar banco'}
+        </button>
+      </div>
+      {visible.length === 0 && (
+        <p className="muted">
+          Conecte seu cartão pelo Open Finance e os gastos entram aqui sozinhos, já com o imposto calculado.
+        </p>
+      )}
+      <ul className="conns">
+        {visible.map((c) => (
+          <li key={c.id}>
+            <span className={`dot ${c.status}`} />
+            <span className="what">
+              <span>{c.institution}</span>
+              <span className="muted small">
+                {statusLabel[c.status]}
+                {c.lastSyncAt && ` · atualizado ${new Date(c.lastSyncAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`}
+              </span>
+            </span>
+            {c.status === 'active' && (
+              <button className="ghost" disabled={!!busy} onClick={() => void run(c.id, async () => { await api.syncConnection(c.id); setTimeout(() => void onChange(), 2_000); })}>
+                {busy === c.id ? '…' : 'Atualizar'}
+              </button>
+            )}
+            <button
+              className="ghost"
+              disabled={!!busy}
+              onClick={() => {
+                if (window.confirm(`Desconectar ${c.institution}? Os gastos já importados continuam aqui.`)) {
+                  void run(`del-${c.id}`, async () => { await api.disconnect(c.id); await onChange(); });
+                }
+              }}
+            >
+              Desconectar
+            </button>
+          </li>
+        ))}
+      </ul>
+      {error && <p className="error">{error}</p>}
+      <p className="muted small">Ambiente de teste: o "Banco Sandbox" gera compras fictícias automaticamente.</p>
+    </section>
   );
 }
 

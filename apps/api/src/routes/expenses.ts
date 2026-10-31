@@ -44,12 +44,14 @@ export interface ExpenseRow {
   tax_total_cents: number;
   tax_rate_pct: number;
   rates_version: string;
+  source: 'manual' | 'openfinance';
+  mcc: number | null;
   created_at: Date;
 }
 
 const COLUMNS = `id, amount_cents, category, description, uf, spent_on,
   tax_federal_cents, tax_estadual_cents, tax_municipal_cents, tax_total_cents,
-  tax_rate_pct, rates_version, created_at`;
+  tax_rate_pct, rates_version, source, mcc, created_at`;
 
 export function toExpense(r: ExpenseRow) {
   return {
@@ -67,6 +69,8 @@ export function toExpense(r: ExpenseRow) {
       ratePct: r.tax_rate_pct,
       ratesVersion: r.rates_version,
     },
+    source: r.source,
+    mcc: r.mcc,
     createdAt: r.created_at,
   };
 }
@@ -200,8 +204,15 @@ export async function expenseRoutes(app: FastifyInstance) {
 
   app.delete('/expenses/:id', async (req, reply) => {
     const { id } = idParam.parse(req.params);
-    const { rowCount } = await pool.query('DELETE FROM expenses WHERE user_id = $1 AND id = $2', [req.user.sub, id]);
-    if (!rowCount) throw notFound('Gasto');
+    // Gasto importado do banco deixa uma "lápide" para a próxima sincronização não recriá-lo.
+    const { rows } = await pool.query<{ n: number }>(
+      `WITH d AS (DELETE FROM expenses WHERE user_id = $1 AND id = $2 RETURNING external_id),
+            t AS (INSERT INTO expense_tombstones (user_id, external_id)
+                  SELECT $1, external_id FROM d WHERE external_id IS NOT NULL ON CONFLICT DO NOTHING)
+       SELECT count(*)::int AS n FROM d`,
+      [req.user.sub, id],
+    );
+    if (!rows[0]?.n) throw notFound('Gasto');
     await app.cache.bumpUser(req.user.sub);
     return reply.status(204).send();
   });

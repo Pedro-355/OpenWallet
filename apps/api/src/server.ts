@@ -4,6 +4,7 @@ import { loadConfig } from './config.js';
 import { createPool } from './db/pool.js';
 import { migrate } from './db/migrate.js';
 import { buildApp } from './app.js';
+import { createProvider } from './lib/provider-factory.js';
 
 const config = loadConfig();
 const rates = loadRatesFile(config.TAX_RATES_FILE);
@@ -25,7 +26,7 @@ if (config.RUN_MIGRATIONS_ON_START) {
   await migrate(pool);
 }
 
-const app = await buildApp({ config, pool, redis, rates });
+const app = await buildApp({ config, pool, redis, rates, provider: createProvider(config) });
 pool.on('error', (err) => app.log.error({ err }, 'erro em conexão ociosa do Postgres'));
 
 if (rates.illustrative) {

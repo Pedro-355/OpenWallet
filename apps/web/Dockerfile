@@ -5,6 +5,7 @@ COPY package.json package-lock.json ./
 COPY packages/tax/package.json packages/tax/
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
+COPY apps/openfinance-mock/package.json apps/openfinance-mock/
 RUN npm ci --no-audit --no-fund
 COPY tsconfig.base.json ./
 COPY packages/tax packages/tax

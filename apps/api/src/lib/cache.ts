@@ -1,5 +1,4 @@
 import type { Redis } from 'ioredis';
-import type { FastifyBaseLogger } from 'fastify';
 
 /**
  * Cache com "fail-open": se o Redis cair, a API continua respondendo (só fica mais lenta).
@@ -9,7 +8,7 @@ import type { FastifyBaseLogger } from 'fastify';
 export class Cache {
   constructor(
     private readonly redis: Redis | null,
-    private readonly log: FastifyBaseLogger,
+    private readonly log: { warn(obj: object, msg?: string): void },
   ) {}
 
   private async safe<T>(op: string, fn: (r: Redis) => Promise<T>): Promise<T | null> {

@@ -76,3 +76,14 @@ describe('validateRatesTable', () => {
     expect(() => validateRatesTable(bad2)).toThrow(/UF inválida/);
   });
 });
+
+import { categoryFromMcc } from './index.js';
+describe('categoryFromMcc', () => {
+  it('mapeia MCCs conhecidos e usa o padrão nos demais', () => {
+    expect(categoryFromMcc(5411)).toBe('mercado');
+    expect(categoryFromMcc(5541)).toBe('combustivel');
+    expect(categoryFromMcc(4121)).toBe('transporte');
+    expect(categoryFromMcc(1234)).toBe('outros');
+    expect(categoryFromMcc(null)).toBe('outros');
+  });
+});
