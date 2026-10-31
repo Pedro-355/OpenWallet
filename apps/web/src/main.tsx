@@ -3,7 +3,10 @@ import { createRoot } from 'react-dom/client';
 import { api, auth, ApiError } from './api';
 import { AuthScreen } from './AuthScreen';
 import { Impostometro } from './Impostometro';
+import { setupPwa } from './install';
 import './styles.css';
+
+setupPwa();
 
 const CALLBACK_PATH = '/openfinance/callback';
 

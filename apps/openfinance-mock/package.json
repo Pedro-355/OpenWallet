@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Banco Sandbox: servidor simulado no estilo Open Finance Brasil (consentimento, cartões, transações) que envia webhooks de novas compras",
+  "description": "Banco Sandbox: servidor simulado no estilo Open Finance Brasil (consentimento, cart\u00f5es, transa\u00e7\u00f5es) que envia webhooks de novas compras",
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
@@ -18,5 +18,14 @@
     "@types/node": "^22.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0"
-  }
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/app.d.ts",
+      "default": "./dist/app.js"
+    }
+  },
+  "files": [
+    "dist"
+  ]
 }

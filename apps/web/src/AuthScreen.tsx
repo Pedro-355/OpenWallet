@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { UFS } from '@openwallet/tax';
 import { auth, ApiError } from './api';
+import { InstallBanner } from './InstallBanner';
 
 export function AuthScreen() {
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -27,6 +28,7 @@ export function AuthScreen() {
   return (
     <main className="auth">
       <div className="auth-card">
+        <InstallBanner />
         <p className="eyebrow">OpenWallet</p>
         <h1>Impostômetro</h1>
         <p className="muted">Veja quanto de cada gasto seu foi para impostos.</p>

@@ -18,7 +18,11 @@ import { healthRoutes } from './routes/health.js';
 import { taxRoutes } from './routes/tax.js';
 import { openFinanceRoutes } from './routes/openfinance.js';
 import type { OpenFinanceProvider } from './lib/openfinance-client.js';
-import { createOpenFinanceService } from './services/openfinance.js';
+import { createOpenFinanceService, type OpenFinanceService } from './services/openfinance.js';
+import fastifyStatic from '@fastify/static';
+import { resolve } from 'node:path';
+import { existsSync } from 'node:fs';
+import { sandboxBank } from '@openwallet/openfinance-mock';
 
 export interface AppDeps {
   config: Config;
@@ -34,6 +38,7 @@ declare module 'fastify' {
     deps: AppDeps;
     cache: Cache;
     ofProvider: OpenFinanceProvider | null;
+    ofService: OpenFinanceService | null;
     authenticate: (req: FastifyRequest) => Promise<void>;
   }
 }
@@ -76,6 +81,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
         backfillDays: config.OPENFINANCE_BACKFILL_DAYS,
       })
     : null;
+  app.decorate('ofService', ofService);
 
   app.addHook('onSend', async (req, reply) => {
     reply.header('x-request-id', req.id);
@@ -108,7 +114,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       }
       return `ip:${req.ip}`;
     },
-    allowList: (req) => req.url.startsWith('/health'),
+    // Saúde e o banco simulado embutido (chamado pela própria API) ficam fora do limite.
+    allowList: (req) => req.url.startsWith('/health') || req.url.startsWith('/sandbox-bank'),
   });
 
   await app.register(jwt, {
@@ -147,9 +154,26 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     });
   });
 
-  app.setNotFoundHandler((req, reply) =>
-    reply.status(404).send({ error: 'not_found', message: `Rota ${req.method} ${req.url} não existe` }),
-  );
+  // Modo "tudo em um": serve a tela web no mesmo endereço da API.
+  const webDir = config.SERVE_WEB_DIR ? resolve(config.SERVE_WEB_DIR) : null;
+  if (webDir && !existsSync(`${webDir}/index.html`)) throw new Error(`SERVE_WEB_DIR sem index.html: ${webDir}`);
+  if (webDir) {
+    await app.register(fastifyStatic, {
+      root: webDir,
+      wildcard: false,
+      setHeaders: (res, path) => {
+        res.header('cache-control', path.includes('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache');
+      },
+    });
+  }
+  const isApiPath = (url: string) => /^\/(v1|health|sandbox-bank)(\/|$|\?)/.test(url);
+  app.setNotFoundHandler((req, reply) => {
+    // Rotas do app (ex.: /openfinance/callback) devolvem o index.html: o React cuida delas.
+    if (webDir && req.method === 'GET' && !isApiPath(req.url)) {
+      return reply.header('cache-control', 'no-cache').sendFile('index.html');
+    }
+    return reply.status(404).send({ error: 'not_found', message: `Rota ${req.method} ${req.url} não existe` });
+  });
 
   await app.register(healthRoutes);
   await app.register(taxRoutes, { prefix: '/v1' });
@@ -157,6 +181,19 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(expenseRoutes, { prefix: '/v1' });
   await app.register(impostometroRoutes, { prefix: '/v1' });
   await app.register(openFinanceRoutes, { prefix: '/v1', service: ofService });
+
+  // Banco Sandbox embutido (demo/deploy gratuito). Em produção, aponte para um provedor real.
+  if (config.SANDBOX_BANK) {
+    const bank = sandboxBank({
+      publicUrl: `${config.PUBLIC_URL}/sandbox-bank`,
+      apiKey: config.OPENFINANCE_API_KEY,
+      webhookSecret: config.OPENFINANCE_WEBHOOK_SECRET,
+      webhookUrl: `http://127.0.0.1:${config.PORT}/v1/webhooks/openfinance`,
+      simulateIntervalMs: config.SANDBOX_SIMULATE_INTERVAL_MS,
+      backfillDays: 30,
+    });
+    await app.register(bank.plugin, { prefix: '/sandbox-bank' });
+  }
 
   return app;
 }

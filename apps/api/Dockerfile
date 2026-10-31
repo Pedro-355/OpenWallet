@@ -9,8 +9,9 @@ COPY apps/openfinance-mock/package.json apps/openfinance-mock/
 RUN npm ci --no-audit --no-fund
 COPY tsconfig.base.json ./
 COPY packages/tax packages/tax
+COPY apps/openfinance-mock apps/openfinance-mock
 COPY apps/api apps/api
-RUN npm run build -w @openwallet/tax && npm run build -w @openwallet/api
+RUN npm run build -w @openwallet/tax && npm run build -w @openwallet/openfinance-mock && npm run build -w @openwallet/api
 
 FROM node:22-alpine AS deps
 WORKDIR /app
@@ -19,7 +20,7 @@ COPY packages/tax/package.json packages/tax/
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
 COPY apps/openfinance-mock/package.json apps/openfinance-mock/
-RUN npm ci --omit=dev --no-audit --no-fund -w @openwallet/api -w @openwallet/tax
+RUN npm ci --omit=dev --no-audit --no-fund -w @openwallet/api -w @openwallet/tax -w @openwallet/openfinance-mock
 
 FROM node:22-alpine
 ENV NODE_ENV=production \
@@ -31,6 +32,8 @@ COPY --from=build /app/package.json ./
 COPY --from=build /app/packages/tax/package.json packages/tax/
 COPY --from=build /app/packages/tax/dist packages/tax/dist
 COPY --from=build /app/packages/tax/data packages/tax/data
+COPY --from=build /app/apps/openfinance-mock/package.json apps/openfinance-mock/
+COPY --from=build /app/apps/openfinance-mock/dist apps/openfinance-mock/dist
 COPY --from=build /app/apps/api/package.json apps/api/
 COPY --from=build /app/apps/api/dist apps/api/dist
 COPY --from=build /app/apps/api/migrations apps/api/migrations

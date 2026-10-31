@@ -88,8 +88,12 @@ const isoDate = (d: Date) => d.toISOString().slice(0, 10);
 const brl = (cents: number) => (cents / 100).toFixed(2);
 const html = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
-export async function buildMockApp(opts: MockOptions): Promise<MockApp> {
-  const app = Fastify({ logger: opts.logger ?? false });
+/**
+ * Cria o banco simulado como plugin Fastify. Pode rodar sozinho (buildMockApp) ou
+ * embutido na API sob um prefixo (ex.: /sandbox-bank), para deploy num serviço só.
+ */
+export function sandboxBank(opts: MockOptions) {
+  let app!: FastifyInstance;
   const consents = new Map<string, Consent>();
   const accounts = new Map<string, Account>();
   const deliveries: { eventId: string; status: 'delivered' | 'failed' | 'pending'; attempts: number }[] = [];
@@ -185,6 +189,8 @@ export async function buildMockApp(opts: MockOptions): Promise<MockApp> {
     return tx;
   }
 
+  const plugin = async (instance: FastifyInstance) => {
+  app = instance;
   // ---------- consentimento ----------
   app.post('/open-banking/consents/v3/consents', async (req, reply) => {
     requireKey(req.headers['x-api-key']);
@@ -238,7 +244,7 @@ export async function buildMockApp(opts: MockOptions): Promise<MockApp> {
     const id = (req.query as { consent_id?: string }).consent_id ?? '';
     const c = consents.get(id);
     if (!c) return reply.status(404).type('text/html').send('<p>Consentimento não encontrado.</p>');
-    const link = (d: string) => `/authorize/decision?consent_id=${encodeURIComponent(id)}&decision=${d}`;
+    const link = (d: string) => `${opts.publicUrl}/authorize/decision?consent_id=${encodeURIComponent(id)}&decision=${d}`;
     return reply.type('text/html').send(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>Banco Sandbox — autorizar</title>
 <style>body{font-family:system-ui,sans-serif;background:#eef1f5;margin:0;display:grid;place-items:center;min-height:100vh}
@@ -371,7 +377,7 @@ h1{font-size:20px;margin:12px 0 4px}ul{padding-left:18px;color:#333}a{display:bl
 
   // ---------- gerador automático ----------
   if (opts.simulateIntervalMs && opts.simulateIntervalMs > 0) {
-    const timer = setInterval(() => {
+    timer = setInterval(() => {
       for (const c of consents.values()) {
         if (c.status === 'AUTHORISED' && Math.random() < 0.6) {
           try {
@@ -383,8 +389,21 @@ h1{font-size:20px;margin:12px 0 4px}ul{padding-left:18px;color:#333}a{display:bl
       }
     }, opts.simulateIntervalMs);
     timer.unref();
-    app.addHook('onClose', async () => clearInterval(timer));
+    app.addHook('onClose', async () => stop());
   }
+  };
 
-  return Object.assign(app, { simulatePurchase }) as unknown as MockApp;
+  let timer: NodeJS.Timeout | null = null;
+  const stop = () => {
+    if (timer) clearInterval(timer);
+    timer = null;
+  };
+  return { plugin, simulatePurchase, stop };
+}
+
+export async function buildMockApp(opts: MockOptions): Promise<MockApp> {
+  const app = Fastify({ logger: opts.logger ?? false });
+  const bank = sandboxBank(opts);
+  await app.register(bank.plugin);
+  return Object.assign(app, { simulatePurchase: bank.simulatePurchase }) as unknown as MockApp;
 }

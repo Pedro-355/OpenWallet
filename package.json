@@ -12,8 +12,8 @@
   },
   "scripts": {
     "build": "npm run build -w @openwallet/tax && npm run build -w @openwallet/api && npm run build -w @openwallet/openfinance-mock && npm run build -w @openwallet/web",
-    "typecheck": "npm run build -w @openwallet/tax && npm run typecheck --workspaces --if-present",
-    "test": "npm run build -w @openwallet/tax && npm run test --workspaces --if-present",
+    "typecheck": "npm run build -w @openwallet/tax && npm run build -w @openwallet/openfinance-mock && npm run typecheck --workspaces --if-present",
+    "test": "npm run build -w @openwallet/tax && npm run build -w @openwallet/openfinance-mock && npm run test --workspaces --if-present",
     "dev:api": "npm run dev -w @openwallet/api",
     "dev:web": "npm run dev -w @openwallet/web",
     "dev:worker": "npm run dev:worker -w @openwallet/api",

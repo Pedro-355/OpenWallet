@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 
 const bool = z
@@ -41,6 +42,17 @@ const schema = z.object({
   OPENFINANCE_BACKFILL_DAYS: z.coerce.number().int().positive().max(365).default(90),
 
   WORKER_CONCURRENCY: z.coerce.number().int().positive().max(50).default(4),
+
+  // ---- Modo "tudo em um" (deploy gratuito num serviço só) ----
+  /** URL pública deste servidor. No Render vem de RENDER_EXTERNAL_URL. */
+  PUBLIC_URL: z.string().url().optional(),
+  /** Roda o worker dentro do processo da API (em vez de um processo separado). */
+  RUN_WORKER: bool.default(false),
+  /** Embute o Banco Sandbox em /sandbox-bank. */
+  SANDBOX_BANK: bool.default(false),
+  SANDBOX_SIMULATE_INTERVAL_MS: z.coerce.number().int().min(0).default(45_000),
+  /** Pasta com o build da tela web para servir no mesmo endereço (ex.: apps/web/dist). */
+  SERVE_WEB_DIR: z.string().optional(),
 });
 
 export type Config = z.infer<typeof schema>;
@@ -51,5 +63,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     const msg = parsed.error.issues.map((i) => `  ${i.path.join('.')}: ${i.message}`).join('\n');
     throw new Error(`Configuração inválida:\n${msg}`);
   }
-  return parsed.data;
+  const c = parsed.data;
+  c.PUBLIC_URL ??= env.RENDER_EXTERNAL_URL || `http://localhost:${c.PORT}`;
+  if (c.SANDBOX_BANK) {
+    // O próprio servidor faz o papel do banco: a API fala com ele pela rede local.
+    c.OPENFINANCE_PROVIDER = 'sandbox';
+    c.OPENFINANCE_BASE_URL ??= `http://127.0.0.1:${c.PORT}/sandbox-bank`;
+    if (!env.OPENFINANCE_REDIRECT_URL) c.OPENFINANCE_REDIRECT_URL = `${c.PUBLIC_URL}/openfinance/callback`;
+    if (c.SERVE_WEB_DIR && !env.CORS_ORIGINS) c.CORS_ORIGINS = c.PUBLIC_URL;
+    c.OPENFINANCE_API_KEY ||= randomBytes(24).toString('base64url');
+    c.OPENFINANCE_WEBHOOK_SECRET ||= randomBytes(32).toString('base64url');
+  }
+  return c;
 }

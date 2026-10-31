@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { UFS, calculateTax, isUF, type TaxRatesTable } from '@openwallet/tax';
 import { api, auth, ApiError, type Connection, type Expense, type History, type Summary, type User } from './api';
+import { InstallBanner } from './InstallBanner';
 import { brl, capitalize, dayLabel, lastDay, monthLong, monthShort, parseMoney, pct, shiftMonth, todayISO } from './format';
 
 export function Impostometro({ user, flash, onFlashSeen }: { user: User; flash?: string; onFlashSeen?: () => void }) {
@@ -106,6 +107,8 @@ export function Impostometro({ user, flash, onFlashSeen }: { user: User; flash?:
           </button>
         </div>
       </header>
+
+      <InstallBanner />
 
       <nav className="month-nav" aria-label="Mês">
         <button className="ghost" onClick={() => setMonth(shiftMonth(month, -1))} aria-label="Mês anterior">

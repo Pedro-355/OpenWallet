@@ -5,6 +5,7 @@ import { createPool } from './db/pool.js';
 import { migrate } from './db/migrate.js';
 import { buildApp } from './app.js';
 import { createProvider } from './lib/provider-factory.js';
+import { createWorker } from './lib/worker.js';
 
 const config = loadConfig();
 const rates = loadRatesFile(config.TAX_RATES_FILE);
@@ -35,6 +36,14 @@ if (rates.illustrative) {
 
 await app.listen({ host: config.HOST, port: config.PORT });
 
+// Modo "tudo em um": o worker roda no mesmo processo (bom para começar; separe quando crescer).
+const worker =
+  config.RUN_WORKER && app.ofService
+    ? createWorker({ pool, log: app.log, handlers: app.ofService.handlers, concurrency: config.WORKER_CONCURRENCY })
+    : null;
+await worker?.start();
+if (worker) app.log.info('worker rodando dentro da API');
+
 // Desligamento gracioso: para de aceitar conexões, termina as requisições em andamento
 // e só então fecha banco e Redis. Evita erros 502 durante deploys.
 let closing = false;
@@ -48,6 +57,7 @@ async function shutdown(signal: string) {
   }, 25_000);
   force.unref();
   try {
+    await worker?.stop();
     await app.close();
     await pool.end();
     await redis?.quit();
