@@ -1,0 +1,61 @@
+# Sobe tudo localmente:  JWT_SECRET=$(openssl rand -hex 32) docker compose up --build
+# Acesse http://localhost:8080
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: openwallet
+      POSTGRES_PASSWORD: openwallet
+      POSTGRES_DB: openwallet
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openwallet"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    # Só cache e rate limit: pode descartar chaves antigas quando a memória encher.
+    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru", "--save", ""]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  # Roda as migrações uma vez antes de subir as réplicas da API.
+  migrate:
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    command: ["node", "apps/api/dist/db/migrate-cli.js"]
+    environment:
+      DATABASE_URL: postgres://openwallet:openwallet@postgres:5432/openwallet
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: "no"
+
+  api:
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    environment:
+      DATABASE_URL: postgres://openwallet:openwallet@postgres:5432/openwallet
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET (32+ caracteres)}
+      CORS_ORIGINS: http://localhost:8080
+      DB_POOL_MAX: "10"
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    deploy:
+      replicas: 2
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+  web:
+    build: { context: ., dockerfile: apps/web/Dockerfile }
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  pgdata:

@@ -1,0 +1,33 @@
+{
+  "name": "@openwallet/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=.env src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/server.js",
+    "migrate": "tsx --env-file-if-exists=.env src/db/migrate-cli.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.0.0",
+    "@fastify/helmet": "^13.0.0",
+    "@fastify/jwt": "^10.0.0",
+    "@fastify/rate-limit": "^11.0.0",
+    "@openwallet/tax": "0.1.0",
+    "fastify": "^5.6.0",
+    "ioredis": "^5.4.0",
+    "pg": "^8.13.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.11.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^4.0.0"
+  }
+}

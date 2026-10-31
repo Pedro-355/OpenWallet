@@ -1,0 +1,31 @@
+{
+  "name": "@openwallet/tax",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Cálculo do impostômetro: carga tributária aproximada (Lei 12.741/2012) por categoria e UF",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "default": "./dist/node.js"
+    },
+    "./data/rates.json": "./data/rates.json"
+  },
+  "files": [
+    "dist",
+    "data"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vitest": "^4.0.0"
+  }
+}
