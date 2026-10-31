@@ -17,6 +17,23 @@ apps/openfinance-mock   Banco Sandbox: Open Finance simulado que envia webhooks 
 scripts/       importador das tabelas IBPT
 ```
 
+## Instalar no celular
+
+O OpenWallet é um **PWA**: instala direto do navegador, com ícone na tela inicial, abre em tela cheia e funciona sem internet (os dados atualizam quando a conexão volta). Para instalar, ele precisa estar publicado num endereço `https://`.
+
+**1. Publicar de graça no Render (uma vez só):**
+1. Crie uma conta em [render.com](https://render.com) entrando com o GitHub.
+2. **New → Blueprint**, escolha o repositório `OpenWallet` e a branch onde está o `render.yaml`.
+3. Clique em **Apply**. O Render cria o banco, o Redis e o app (API + worker + Banco Sandbox + tela) e devolve um endereço tipo `https://openwallet-xxxx.onrender.com`.
+
+**2. Instalar:**
+- **Android (Chrome):** abra o endereço → aparece o aviso **Instalar** no app (ou menu ⋮ → *Instalar app*).
+- **iPhone (Safari):** abra o endereço → **Compartilhar** → **Adicionar à Tela de Início**.
+
+> Plano gratuito: o servidor dorme após ~15 min sem uso (o primeiro acesso leva cerca de 1 min), o Banco Sandbox perde as conexões quando o servidor reinicia, e o Postgres gratuito expira em 30 dias. Para uso contínuo, troque os planos no `render.yaml`.
+>
+> Para publicar nas lojas depois: o mesmo PWA vira pacote da Play Store com o [PWABuilder](https://www.pwabuilder.com) (Trusted Web Activity), sem reescrever o app.
+
 ## Rodando
 
 **Com Docker (tudo junto: 2 réplicas da API, 2 workers, banco simulado):**
