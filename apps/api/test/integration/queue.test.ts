@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { claim, enqueue, reapStale } from '../src/lib/queue.js';
-import { createWorker } from '../src/lib/worker.js';
-import { setup } from './helpers.js';
+import { claim, enqueue, reapStale } from '../../src/lib/queue.js';
+import { createWorker } from '../../src/lib/worker.js';
+import { setup } from '../helpers.js';
 
 const silent = { info() {}, warn() {}, error() {} };
 let ctx: Awaited<ReturnType<typeof setup>>;

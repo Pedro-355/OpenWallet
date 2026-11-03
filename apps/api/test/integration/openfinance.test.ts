@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadRatesFile } from '@openwallet/tax/node';
-import { buildMockApp, signPayload, type MockApp, type MockOptions } from '../../openfinance-mock/src/app.js';
-import { SandboxOpenFinanceClient } from '../src/lib/openfinance-client.js';
-import { createWorker } from '../src/lib/worker.js';
-import { createOpenFinanceService, isPurchase } from '../src/services/openfinance.js';
-import { registerUser, setup } from './helpers.js';
+import { buildMockApp, signPayload, type MockApp, type MockOptions } from '@openwallet/openfinance-mock';
+import { SandboxOpenFinanceClient } from '../../src/lib/openfinance-client.js';
+import { createWorker } from '../../src/lib/worker.js';
+import { createOpenFinanceService, isPurchase } from '../../src/services/openfinance.js';
+import { registerUser, setup } from '../helpers.js';
 
 const SECRET = 'segredo-de-teste-do-webhook';
 const silent = { info() {}, warn() {}, error() {} };

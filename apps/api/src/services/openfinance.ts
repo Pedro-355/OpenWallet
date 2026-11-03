@@ -4,6 +4,7 @@ import type { Cache } from '../lib/cache.js';
 import { enqueue } from '../lib/queue.js';
 import { ProviderError, type CardTransaction, type OpenFinanceProvider } from '../lib/openfinance-client.js';
 import type { Logger } from '../lib/worker.js';
+import { amountToCents, daysAgo, isPurchase, isReversal, toSaoPauloDate } from './openfinance-rules.js';
 
 export interface OpenFinanceDeps {
   pool: Pool;
@@ -46,20 +47,8 @@ export interface SyncJob {
   toDate: string;
 }
 
-const spDate = (iso: string) =>
-  new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date(iso));
-const daysAgo = (n: number) => spDate(new Date(Date.now() - n * 86_400_000).toISOString());
-
-/** "123.45" -> 12345 sem passar por float. */
-export function amountToCents(amount: string): number {
-  const m = /^(\d+)(?:\.(\d{1,2}))?$/.exec(amount.trim());
-  if (!m) throw new Error(`valor inválido do provedor: "${amount}"`);
-  return Number(m[1]) * 100 + Number((m[2] ?? '0').padEnd(2, '0'));
-}
-
-/** Compra no cartão = débito que não é tarifa/pagamento. Pagamento de fatura, crédito e cashback não são consumo. */
-export const isPurchase = (t: CardTransaction) => t.creditDebitType === 'DEBITO' && t.transactionType === 'OUTROS';
-export const isReversal = (t: CardTransaction) => t.creditDebitType === 'CREDITO' && t.transactionType === 'ESTORNO';
+export { amountToCents, isPurchase, isReversal } from './openfinance-rules.js';
+const spDate = toSaoPauloDate;
 
 export function createOpenFinanceService(deps: OpenFinanceDeps) {
   const { pool, provider, providerName, rates, log } = deps;

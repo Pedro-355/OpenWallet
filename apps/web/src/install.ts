@@ -28,7 +28,7 @@ export function setupPwa() {
 }
 
 export const isStandalone = () =>
-  window.matchMedia('(display-mode: standalone)').matches ||
+  window.matchMedia?.('(display-mode: standalone)')?.matches === true ||
   (navigator as Navigator & { standalone?: boolean }).standalone === true;
 
 export const isIos = () => /iphone|ipad|ipod/i.test(navigator.userAgent);

@@ -38,6 +38,11 @@ export async function claim(pool: Pool, limit: number): Promise<Job[]> {
   return rows;
 }
 
+/** Espera antes da próxima tentativa: 10s, 20s, 40s... limitada a 1h. */
+export function retryDelaySeconds(attempt: number): number {
+  return Math.min(3600, 10 * 2 ** Math.max(0, attempt - 1));
+}
+
 export async function complete(pool: Pool, id: number) {
   await pool.query(`UPDATE jobs SET status = 'done', locked_at = NULL, updated_at = now() WHERE id = $1`, [id]);
 }
@@ -45,7 +50,7 @@ export async function complete(pool: Pool, id: number) {
 /** Falhou: tenta de novo com espera exponencial (10s, 20s, 40s... até 1h). Esgotou: vai para 'dead'. */
 export async function fail(pool: Pool, job: Job, err: unknown) {
   const dead = job.attempts >= job.max_attempts;
-  const delay = Math.min(3600, 10 * 2 ** (job.attempts - 1));
+  const delay = retryDelaySeconds(job.attempts);
   await pool.query(
     `UPDATE jobs SET status = $2, locked_at = NULL, updated_at = now(),
        run_at = now() + make_interval(secs => $3), last_error = left($4, 2000)

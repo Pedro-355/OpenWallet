@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { registerUser, setup } from './helpers.js';
+import { registerUser, setup } from '../helpers.js';
 
 let ctx: Awaited<ReturnType<typeof setup>>;
 beforeAll(async () => {

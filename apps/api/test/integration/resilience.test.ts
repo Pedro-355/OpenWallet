@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { registerUser, setup } from './helpers.js';
+import { registerUser, setup } from '../helpers.js';
 
 // A API precisa continuar funcionando sem Redis (cache e rate limit degradam com segurança).
 let ctx: Awaited<ReturnType<typeof setup>>;

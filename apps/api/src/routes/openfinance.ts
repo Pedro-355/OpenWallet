@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { verifyWebhookSignature } from '../lib/webhook-signature.js';
 import { z } from 'zod';
 import { HttpError, notFound } from '../lib/errors.js';
 import { enqueue } from '../lib/queue.js';
@@ -16,19 +17,6 @@ const webhookBody = z.object({
   fromDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   toDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
-
-const SIGNATURE_TOLERANCE_S = 300;
-
-/** Confere "t=<unix>,v1=<hmac>" e rejeita assinaturas velhas (ataque de repetição). */
-export function verifySignature(secret: string, header: string | undefined, raw: string, now = Date.now() / 1000): boolean {
-  if (!secret || !header) return false;
-  const parts = Object.fromEntries(header.split(',').map((kv) => kv.split('=') as [string, string]));
-  const t = Number(parts.t);
-  if (!parts.v1 || !Number.isFinite(t) || Math.abs(now - t) > SIGNATURE_TOLERANCE_S) return false;
-  const expected = createHmac('sha256', secret).update(`${parts.t}.${raw}`).digest();
-  const got = Buffer.from(parts.v1, 'hex');
-  return got.length === expected.length && timingSafeEqual(got, expected);
-}
 
 const publicConnection = (c: ConnectionRow) => ({
   id: c.id,
@@ -141,7 +129,7 @@ export async function openFinanceRoutes(app: FastifyInstance, opts: { service: O
     r.post('/webhooks/openfinance', { config: { rateLimit: false } }, async (req, reply) => {
       requireService();
       const raw = (req as unknown as { rawBody: string }).rawBody;
-      if (!verifySignature(config.OPENFINANCE_WEBHOOK_SECRET, req.headers['x-ow-signature'] as string | undefined, raw)) {
+      if (!verifyWebhookSignature(config.OPENFINANCE_WEBHOOK_SECRET, req.headers['x-ow-signature'] as string | undefined, raw)) {
         throw new HttpError(401, 'invalid_signature', 'Assinatura inválida');
       }
       const ev = webhookBody.parse(req.body);

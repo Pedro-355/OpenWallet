@@ -67,10 +67,12 @@ npm run dev:web     # http://localhost:5173 (encaminha /api para a API)
 
 Para ligar o Open Finance no `.env` da API: `OPENFINANCE_BASE_URL=http://localhost:4000`, `OPENFINANCE_API_KEY=sandbox-key`, `OPENFINANCE_WEBHOOK_SECRET=sandbox-webhook-secret`.
 
-**Testes** (precisam de Postgres em `localhost:5433` e Redis em `localhost:6380`, ou defina `TEST_DATABASE_URL` / `TEST_REDIS_URL`):
+**Testes** — guia completo em [TESTING.md](TESTING.md):
 
 ```bash
-npm test
+npm run test:unit          # unitários: sem banco nem rede, em segundos
+npm run test:coverage      # unitários + relatório de cobertura
+npm run test:integration   # integração: precisa de Postgres em localhost:5433 e Redis em :6380
 ```
 
 ## Como o imposto é calculado

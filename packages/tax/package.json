@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Cálculo do impostômetro: carga tributária aproximada (Lei 12.741/2012) por categoria e UF",
+  "description": "C\u00e1lculo do impost\u00f4metro: carga tribut\u00e1ria aproximada (Lei 12.741/2012) por categoria e UF",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -20,12 +20,10 @@
     "data"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json"
   },
   "devDependencies": {
-    "typescript": "^5.6.0",
-    "vitest": "^4.0.0"
+    "typescript": "^5.6.0"
   }
 }
