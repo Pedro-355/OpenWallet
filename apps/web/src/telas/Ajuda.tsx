@@ -1,9 +1,23 @@
-import { useEffect, useState, type FormEvent } from 'react';
-import { brl, parseReais } from '../format';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { parseReais } from '../format';
 import { mvp, type Contador, type PerfilFiscal, type RespostaAssistente } from '../mvpApi';
-import { Cabecalho, Card, Erro, useAcao, useCarregar } from './comum';
+import { Button, Chip, Iniciais, Money, Tag, Toggle } from '../ds/componentes';
+import { Icone } from '../ds/Icone';
+import { Aviso, Cabecalho, Card, Erro, useAcao, useCarregar } from './comum';
 
 const centsParaTexto = (c: number) => (c ? (c / 100).toFixed(2).replace('.', ',') : '');
+
+function LinhaToggle({ titulo, descricao, checked, onChange }: { titulo: string; descricao: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div className="linha-toggle">
+      <div>
+        <span className="title-sm">{titulo}</span>
+        <span className="caption">{descricao}</span>
+      </div>
+      <Toggle checked={checked} onChange={onChange} label={titulo} />
+    </div>
+  );
+}
 
 export function PerfilForm({ perfil, onSalvo }: { perfil: PerfilFiscal; onSalvo?: (p: PerfilFiscal) => void }) {
   const [p, setP] = useState(perfil);
@@ -34,7 +48,7 @@ export function PerfilForm({ perfil, onSalvo }: { perfil: PerfilFiscal; onSalvo?
         <label>
           Como você ganha dinheiro
           <select value={p.tipoRenda} onChange={(e) => set('tipoRenda', e.target.value as PerfilFiscal['tipoRenda'])}>
-            <option value="clt">Carteira assinada (CLT)</option>
+            <option value="clt">Carteira assinada</option>
             <option value="autonomo">Autônomo</option>
             <option value="mei">MEI</option>
             <option value="aposentado">Aposentado</option>
@@ -43,18 +57,21 @@ export function PerfilForm({ perfil, onSalvo }: { perfil: PerfilFiscal; onSalvo?
         </label>
         <label>
           Renda bruta por mês (R$)
-          <input inputMode="decimal" value={renda} onChange={(e) => setRenda(e.target.value)} />
+          <input inputMode="decimal" value={renda} onChange={(e) => setRenda(e.target.value)} placeholder="R$ 0,00" />
         </label>
       </div>
       <label>
         Dependentes no IR
         <input type="number" min={0} max={20} value={p.dependentes} onChange={(e) => set('dependentes', Number(e.target.value) || 0)} />
       </label>
-      <fieldset className="stack">
-        <legend>Família (para o cashback)</legend>
-        <label className="check">
-          <input type="checkbox" checked={p.cadunico} onChange={(e) => set('cadunico', e.target.checked)} /> Família inscrita no CadÚnico
-        </label>
+      <fieldset>
+        <legend>Família</legend>
+        <LinhaToggle
+          titulo="Família inscrita no CadÚnico"
+          descricao="Para saber se vocês recebem o cashback da reforma."
+          checked={p.cadunico}
+          onChange={(v) => set('cadunico', v)}
+        />
         <div className="two">
           <label>
             Pessoas na família
@@ -62,22 +79,20 @@ export function PerfilForm({ perfil, onSalvo }: { perfil: PerfilFiscal; onSalvo?
           </label>
           <label>
             Renda da família por mês (R$)
-            <input inputMode="decimal" value={rendaFamilia} onChange={(e) => setRendaFamilia(e.target.value)} />
+            <input inputMode="decimal" value={rendaFamilia} onChange={(e) => setRendaFamilia(e.target.value)} placeholder="R$ 0,00" />
           </label>
         </div>
       </fieldset>
-      <fieldset className="stack">
+      <fieldset>
         <legend>Obrigações</legend>
-        <label className="check">
-          <input type="checkbox" checked={p.mei} onChange={(e) => set('mei', e.target.checked)} /> Sou MEI
-        </label>
+        <LinhaToggle titulo="Sou MEI" descricao="Para acompanhar o limite, o DAS e emitir notas." checked={p.mei} onChange={(v) => set('mei', v)} />
         {p.mei && (
-          <div className="two">
+          <div className="stack">
             <label>
               Atividade do MEI
               <select value={p.meiAtividade ?? 'servicos'} onChange={(e) => set('meiAtividade', e.target.value as PerfilFiscal['meiAtividade'])}>
                 <option value="servicos">Serviços</option>
-                <option value="comercio">Comércio/indústria</option>
+                <option value="comercio">Comércio ou indústria</option>
                 <option value="comercio_servicos">Os dois</option>
               </select>
             </label>
@@ -87,17 +102,18 @@ export function PerfilForm({ perfil, onSalvo }: { perfil: PerfilFiscal; onSalvo?
             </label>
           </div>
         )}
-        <label className="check">
-          <input type="checkbox" checked={p.carneLeao} onChange={(e) => set('carneLeao', e.target.checked)} /> Recebo de pessoa física ou aluguel (carnê-leão)
-        </label>
-        <label className="check">
-          <input type="checkbox" checked={p.declaraIr} onChange={(e) => set('declaraIr', e.target.checked)} /> Declaro Imposto de Renda
-        </label>
+        <LinhaToggle
+          titulo="Recebo de pessoa física ou aluguel"
+          descricao="Para lembrar do carnê-leão todo mês."
+          checked={p.carneLeao}
+          onChange={(v) => set('carneLeao', v)}
+        />
+        <LinhaToggle titulo="Declaro Imposto de Renda" descricao="Para lembrar do prazo da declaração." checked={p.declaraIr} onChange={(v) => set('declaraIr', v)} />
       </fieldset>
-      <button className="primary" disabled={ocupado}>
+      <Button variant="ink" type="submit" disabled={ocupado}>
         Salvar perfil
-      </button>
-      {salvo && <p className="notice ok">Perfil salvo.</p>}
+      </Button>
+      {salvo && <Aviso tom="ok">Perfil salvo.</Aviso>}
       <Erro mensagem={erro} />
     </form>
   );
@@ -105,7 +121,7 @@ export function PerfilForm({ perfil, onSalvo }: { perfil: PerfilFiscal; onSalvo?
 
 interface Mensagem {
   autor: 'voce' | 'assistente';
-  texto: string;
+  texto: ReactNode;
   fontes?: RespostaAssistente['fontes'];
 }
 
@@ -130,9 +146,9 @@ export function Assistente() {
       {conversa.length === 0 && (
         <div className="chips">
           {sugestoes.map((s) => (
-            <button key={s} className="ghost small-btn" onClick={() => void perguntar(s)}>
+            <Chip key={s} onClick={() => void perguntar(s)}>
               {s}
-            </button>
+            </Chip>
           ))}
         </div>
       )}
@@ -140,7 +156,7 @@ export function Assistente() {
         {conversa.map((m, i) => (
           <li key={i} className={m.autor}>
             <p>{m.texto}</p>
-            {m.fontes && m.fontes.length > 0 && <p className="muted small">Fontes: {m.fontes.map((f) => f.fonte).join('; ')}</p>}
+            {m.fontes && m.fontes.length > 0 && <p className="label">Fontes: {m.fontes.map((f) => f.fonte).join('; ')}</p>}
           </li>
         ))}
       </ul>
@@ -151,13 +167,13 @@ export function Assistente() {
           void perguntar(pergunta);
         }}
       >
-        <input aria-label="Sua pergunta" value={pergunta} onChange={(e) => setPergunta(e.target.value)} placeholder="Pergunte sobre impostos…" />
-        <button className="primary" disabled={ocupado}>
-          {ocupado ? '…' : 'Perguntar'}
-        </button>
+        <input aria-label="Sua pergunta" value={pergunta} onChange={(e) => setPergunta(e.target.value)} placeholder="Pergunte sobre impostos" />
+        <Button variant="ink" type="submit" disabled={ocupado} aria-label="Perguntar">
+          <Icone nome="enviar" tamanho={18} />
+        </Button>
       </form>
       <Erro mensagem={erro} />
-      <p className="muted small">Respostas informativas, com base na lei. Para o seu caso específico, fale com um contador.</p>
+      <p className="caption">Respostas informativas, com base na lei. Para o seu caso, um contador pode ajudar.</p>
     </div>
   );
 }
@@ -182,22 +198,26 @@ function Contadores() {
   return (
     <Card titulo="Falar com um contador">
       <Erro mensagem={lista.erro} />
-      {enviado && <p className="notice ok">{enviado}</p>}
+      {enviado && <Aviso tom="ok">{enviado}</Aviso>}
       <ul className="lista">
         {lista.dados?.contadores.map((c) => (
           <li key={c.id}>
-            <span className="what">
-              <span>
-                {c.exemplo && <span className="badge">Exemplo</span>}
-                {c.nome}
+            <Iniciais nome={c.nome} />
+            <div className="item-texto">
+              <span>{c.nome}</span>
+              <span className="label">
+                {c.cidade}, {c.uf} · consulta a partir de <Money cents={c.precoConsultaCents} size="sm" />
               </span>
-              <span className="muted small">
-                {c.cidade}/{c.uf} · {c.especialidades.join(', ').replace(/_/g, ' ')} · consulta {brl(c.precoConsultaCents)}
+              <span className="chips">
+                {c.exemplo && <Tag tone="attention">Exemplo</Tag>}
+                {c.especialidades.slice(0, 2).map((e) => (
+                  <Tag key={e}>{e.replace(/_/g, ' ')}</Tag>
+                ))}
               </span>
-            </span>
-            <button className="ghost" onClick={() => setAberto(c)}>
+            </div>
+            <Button variant="secondary" onClick={() => setAberto(c)}>
               Contatar
-            </button>
+            </Button>
           </li>
         ))}
       </ul>
@@ -207,9 +227,9 @@ function Contadores() {
             Mensagem para {aberto.nome}
             <textarea value={mensagem} onChange={(e) => setMensagem(e.target.value)} rows={3} minLength={10} />
           </label>
-          <button className="primary" disabled={ocupado || mensagem.trim().length < 10}>
-            Enviar pedido
-          </button>
+          <Button variant="ink" type="submit" disabled={ocupado || mensagem.trim().length < 10}>
+            {mensagem.trim().length < 10 ? 'Escreva sua dúvida para enviar' : 'Enviar pedido'}
+          </Button>
           <Erro mensagem={erro} />
         </form>
       )}
@@ -222,14 +242,14 @@ export function Ajuda() {
   return (
     <div className="page">
       <Cabecalho titulo="Ajuda" subtitulo="Tire dúvidas, ajuste seu perfil ou fale com um contador." />
-      <Card titulo="Assistente tributário">
+      <Card titulo="Pergunte sobre impostos">
         <Assistente />
       </Card>
-      <Card titulo="Seu perfil fiscal">
+      <Card titulo="Seu perfil">
         <Erro mensagem={perfil.erro} onTentar={() => void perfil.recarregar()} />
         {perfil.dados && (
           <>
-            {!perfil.dados.perfil.preenchido && <p className="notice">Preencha para personalizar agenda, IR, MEI e cashback.</p>}
+            {!perfil.dados.perfil.preenchido && <Aviso>Com o perfil preenchido, a agenda, o IR, o MEI e o cashback ficam do seu jeito.</Aviso>}
             <PerfilForm perfil={perfil.dados.perfil} />
           </>
         )}

@@ -1,5 +1,7 @@
 import { useState, useSyncExternalStore } from 'react';
 import { installState } from './install';
+import { Button } from './ds/componentes';
+import { Icone } from './ds/Icone';
 
 const DISMISS_KEY = 'openwallet.install-dismissed';
 
@@ -28,22 +30,22 @@ export function InstallBanner() {
     <div className="install">
       <img src="/icons/icon-192.png" alt="" width={40} height={40} />
       <div className="install-text">
-        <strong>Instale o OpenWallet</strong>
+        <strong>Que tal instalar o OpenWallet?</strong>
         {state === 'prompt' ? (
-          <span className="muted small">Abre direto da tela inicial, em tela cheia.</span>
+          <span>Ele abre direto da tela inicial, em tela cheia.</span>
         ) : (
-          <span className="muted small">
+          <span>
             No Safari, toque em <b>Compartilhar</b> e depois em <b>Adicionar à Tela de Início</b>.
           </span>
         )}
       </div>
       {state === 'prompt' && (
-        <button className="primary small-btn" onClick={() => void installState.prompt()}>
+        <Button variant="ink" onClick={() => void installState.prompt()}>
           Instalar
-        </button>
+        </Button>
       )}
-      <button className="ghost icon" aria-label="Fechar" onClick={close}>
-        ×
+      <button type="button" className="icon-btn sem-borda" aria-label="Fechar" onClick={close}>
+        <Icone nome="fechar" tamanho={18} />
       </button>
     </div>
   );

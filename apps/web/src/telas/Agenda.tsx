@@ -1,8 +1,10 @@
 import { useState, type FormEvent } from 'react';
 import type { AvistaOuParcelado } from '@openwallet/tax';
-import { brl, parseReais } from '../format';
+import { dataLista, parseReais, todayISO } from '../format';
 import { mvp, type Credito, type ItemAgenda } from '../mvpApi';
-import { Cabecalho, Card, dataBR, Erro, useAcao, useCarregar } from './comum';
+import { Button, Chip, Money, OQueE, Tag, formatarReais } from '../ds/componentes';
+import { Icone } from '../ds/Icone';
+import { Aviso, Cabecalho, Card, Erro, useAcao, useCarregar } from './comum';
 
 /** Arquivo .ics para levar os vencimentos à agenda do celular (Google Agenda, Apple, Outlook). */
 export function gerarIcs(itens: ItemAgenda[]): string {
@@ -10,7 +12,7 @@ export function gerarIcs(itens: ItemAgenda[]): string {
   for (const i of itens.filter((x) => !x.pago)) {
     const dia = i.vencimento.replace(/-/g, '');
     const uid = `${i.tipo}-${i.competencia ?? i.id ?? dia}@openwallet`;
-    const resumo = `${i.titulo}${i.valorCents ? ` — ${brl(i.valorCents)}` : ''}`.replace(/[,;]/g, (c) => `\\${c}`);
+    const resumo = `${i.titulo}${i.valorCents ? ` — ${formatarReais(i.valorCents / 100)}` : ''}`.replace(/[,;]/g, (c) => `\\${c}`);
     linhas.push('BEGIN:VEVENT', `UID:${uid}`, `DTSTAMP:${dia}T120000Z`, `DTSTART;VALUE=DATE:${dia}`, `SUMMARY:${resumo}`,
       'BEGIN:VALARM', 'TRIGGER:-P2D', 'ACTION:DISPLAY', `DESCRIPTION:${resumo}`, 'END:VALARM', 'END:VEVENT');
   }
@@ -27,10 +29,18 @@ function baixarIcs(itens: ItemAgenda[]) {
   URL.revokeObjectURL(url);
 }
 
-export function CalculadoraAvista({ inicial }: { inicial?: { valorCents: number; desconto: number; parcelas: number } }) {
-  const [valor, setValor] = useState(inicial ? (inicial.valorCents / 100).toFixed(2).replace('.', ',') : '');
-  const [desconto, setDesconto] = useState(String(inicial?.desconto ?? 3));
-  const [parcelas, setParcelas] = useState(String(inicial?.parcelas ?? 10));
+/** Explicação curta de cada obrigação, mostrada em "O que é isso?". */
+const O_QUE_E: Record<string, string> = {
+  das_mei: 'DAS é a guia mensal do MEI. Junta o INSS (que conta para a sua aposentadoria) e o ISS ou ICMS num valor fixo.',
+  carne_leao: 'Carnê-leão é o imposto de renda pago todo mês por quem recebe de pessoa física, como aluguel ou consulta particular.',
+  dasn_simei: 'DASN-SIMEI é a declaração anual do MEI: você informa quanto faturou no ano anterior.',
+  dirpf: 'É a declaração anual do Imposto de Renda da pessoa física. O prazo oficial sai no começo do ano.',
+};
+
+export function CalculadoraAvista() {
+  const [valor, setValor] = useState('');
+  const [desconto, setDesconto] = useState('3');
+  const [parcelas, setParcelas] = useState('10');
   const [rende, setRende] = useState('1');
   const [r, setR] = useState<AvistaOuParcelado | null>(null);
   const { ocupado, erro, executar } = useAcao();
@@ -49,7 +59,7 @@ export function CalculadoraAvista({ inicial }: { inicial?: { valorCents: number;
       <div className="two">
         <label>
           Valor total (R$)
-          <input inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} />
+          <input inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="R$ 0,00" />
         </label>
         <label>
           Desconto à vista (%)
@@ -62,19 +72,24 @@ export function CalculadoraAvista({ inicial }: { inicial?: { valorCents: number;
           <input type="number" min={1} max={24} value={parcelas} onChange={(e) => setParcelas(e.target.value)} />
         </label>
         <label>
-          Seu dinheiro rende (% ao mês)
+          Quanto seu dinheiro rende (% ao mês)
           <input inputMode="decimal" value={rende} onChange={(e) => setRende(e.target.value)} />
         </label>
       </div>
-      <button className="ghost" disabled={ocupado}>
-        Comparar
-      </button>
+      <Button variant="ink" type="submit" disabled={ocupado}>
+        Comparar as duas opções
+      </Button>
       <Erro mensagem={erro} />
       {r && (
-        <p className={`notice ${r.recomendacao === 'avista' ? 'ok' : ''}`}>
-          <strong>{r.recomendacao === 'avista' ? 'Pague à vista' : r.recomendacao === 'parcelado' ? 'Parcele' : 'Tanto faz'}.</strong> {r.explicacao} À
-          vista: {brl(r.avistaCents)} (economia de {brl(r.economiaAvistaCents)}).
-        </p>
+        <div className="stack">
+          <Tag tone={r.recomendacao === 'avista' ? 'positive' : r.recomendacao === 'parcelado' ? 'primary' : 'neutral'}>
+            {r.recomendacao === 'avista' ? 'À vista sai melhor' : r.recomendacao === 'parcelado' ? 'Parcelar sai melhor' : 'Tanto faz'}
+          </Tag>
+          <p className="body-sm">{r.explicacao}</p>
+          <p className="body-sm">
+            À vista: <Money cents={r.avistaCents} size="sm" />, economia de <Money cents={r.economiaAvistaCents} size="sm" signed />. A decisão é sua.
+          </p>
+        </div>
       )}
     </form>
   );
@@ -103,20 +118,17 @@ function NovoCompromisso({ onSalvo }: { onSalvo: () => void }) {
 
   return (
     <form className="stack" onSubmit={salvar} aria-label="Novo compromisso">
-      <div className="two">
-        <label>
-          Tipo
-          <select value={tipo} onChange={(e) => setTipo(e.target.value as 'ipva')}>
-            <option value="ipva">IPVA</option>
-            <option value="iptu">IPTU</option>
-            <option value="outro">Outro</option>
-          </select>
-        </label>
-        <label>
-          Descrição
-          <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Ex.: IPVA do carro" />
-        </label>
+      <div className="chips" role="group" aria-label="Tipo">
+        {(['ipva', 'iptu', 'outro'] as const).map((t) => (
+          <Chip key={t} selected={tipo === t} onClick={() => setTipo(t)}>
+            {t === 'outro' ? 'Outro' : t.toUpperCase()}
+          </Chip>
+        ))}
       </div>
+      <label>
+        Descrição
+        <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Ex.: IPVA do carro" />
+      </label>
       <div className="two">
         <label>
           Vencimento
@@ -124,12 +136,12 @@ function NovoCompromisso({ onSalvo }: { onSalvo: () => void }) {
         </label>
         <label>
           Valor (R$)
-          <input inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} />
+          <input inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="R$ 0,00" />
         </label>
       </div>
-      <button className="ghost" disabled={ocupado || !vencimento}>
-        Adicionar à agenda
-      </button>
+      <Button variant="ink" type="submit" disabled={ocupado || !vencimento}>
+        {vencimento ? 'Adicionar à agenda' : 'Escolha o vencimento'}
+      </Button>
       <Erro mensagem={erro} />
     </form>
   );
@@ -162,35 +174,41 @@ function Creditos() {
 
   return (
     <Card titulo="Dinheiro a receber">
-      <p className="muted small">A receber: <strong className="accent">{brl(previsto)}</strong></p>
-      <form className="two" onSubmit={salvar} aria-label="Novo crédito">
-        <select aria-label="Origem" value={origem} onChange={(e) => setOrigem(e.target.value as Credito['origem'])}>
-          {Object.entries(ORIGENS).map(([k, v]) => (
-            <option key={k} value={k}>
-              {v}
-            </option>
-          ))}
-        </select>
+      <div className="valor-destaque">
+        <span className="label">A receber</span>
+        <Money cents={previsto} size="lg" />
+      </div>
+      <form className="stack" onSubmit={salvar} aria-label="Novo crédito">
+        <label>
+          De onde vem
+          <select value={origem} onChange={(e) => setOrigem(e.target.value as Credito['origem'])}>
+            {Object.entries(ORIGENS).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v}
+              </option>
+            ))}
+          </select>
+        </label>
         <div className="inline">
           <input aria-label="Valor a receber" inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="R$ 0,00" />
-          <button className="ghost" disabled={ocupado}>
-            +
-          </button>
+          <Button variant="ink" type="submit" disabled={ocupado}>
+            Adicionar
+          </Button>
         </div>
       </form>
       <Erro mensagem={erro || lista.erro} />
       <ul className="lista">
         {lista.dados?.creditos.map((c) => (
-          <li key={c.id}>
-            <span className="what">
+          <li key={c.id} className={c.status === 'recebido' ? 'apagado' : ''}>
+            <div className="item-texto">
               <span>{ORIGENS[c.origem]}</span>
-              <span className="muted small">{c.status === 'recebido' ? 'Recebido' : c.previstoPara ? `Previsto para ${dataBR(c.previstoPara)}` : 'Previsto'}</span>
-            </span>
-            <strong>{brl(c.valorCents)}</strong>
+              <span className="label">{c.status === 'recebido' ? 'Recebido' : c.previstoPara ? `Previsto para ${dataLista(c.previstoPara)}` : 'Previsto'}</span>
+            </div>
+            <Money cents={c.valorCents} signed={c.status === 'recebido'} />
             {c.status === 'previsto' && (
-              <button className="ghost" onClick={() => void mvp.marcarCredito(c.id, 'recebido').then(() => lista.recarregar())}>
+              <Button variant="secondary" onClick={() => void mvp.marcarCredito(c.id, 'recebido').then(() => lista.recarregar())}>
                 Recebi
-              </button>
+              </Button>
             )}
           </li>
         ))}
@@ -204,20 +222,24 @@ function Pendencias() {
   return (
     <Card titulo="Pendências com o Fisco">
       <Erro mensagem={p.erro} />
-      {p.dados && p.dados.pendencias.length === 0 && <p className="muted">Nenhuma pendência encontrada{p.dados.ambiente === 'teste' ? ' (ambiente de teste)' : ''}.</p>}
+      {p.dados && p.dados.pendencias.length === 0 && (
+        <Aviso tom="ok">Nenhuma pendência encontrada{p.dados.ambiente === 'teste' ? ' (ambiente de teste)' : ''}.</Aviso>
+      )}
       <ul className="lista">
         {p.dados?.pendencias.map((x, i) => (
           <li key={i}>
-            <span className="what">
+            <div className="item-texto">
               <span>{x.descricao}</span>
-              <span className="muted small">{x.orgao} · {x.comoResolver}</span>
-            </span>
-            <strong className="error">{brl(x.valorCents)}</strong>
+              <span className="caption">
+                {x.orgao} · {x.comoResolver}
+              </span>
+            </div>
+            <Money cents={-x.valorCents} signed />
           </li>
         ))}
       </ul>
-      <p className="muted small">
-        Confira também:{' '}
+      <p className="caption">
+        Vale conferir também:{' '}
         {p.dados?.ondeConferir.map((l, i) => (
           <span key={l.url}>
             {i > 0 && ' · '}
@@ -234,6 +256,7 @@ function Pendencias() {
 export function Agenda() {
   const ag = useCarregar(() => mvp.agenda());
   const { executar, erro } = useAcao();
+  const hoje = todayISO();
 
   async function alternar(i: ItemAgenda) {
     await executar(async () => {
@@ -243,48 +266,55 @@ export function Agenda() {
     void ag.recarregar();
   }
 
-  // A dica de cada tipo aparece só no próximo vencimento em aberto daquele tipo.
-  const comDica = new Set<string>();
+  // A explicação de cada tipo aparece só no próximo vencimento em aberto daquele tipo.
+  const comExplicacao = new Set<string>();
   for (const i of ag.dados?.itens ?? []) {
-    if (!i.pago && !comDica.has(i.tipo)) {
-      comDica.add(i.tipo);
-      comDica.add(`${i.tipo}|${i.vencimento}`);
+    if (!i.pago && !comExplicacao.has(i.tipo)) {
+      comExplicacao.add(i.tipo);
+      comExplicacao.add(`${i.tipo}|${i.vencimento}`);
     }
   }
 
   return (
     <div className="page">
-      <Cabecalho titulo="Agenda fiscal" subtitulo="DAS, carnê-leão, IR, IPVA e IPTU num lugar só." />
+      <Cabecalho titulo="Agenda" subtitulo="DAS, carnê-leão, IR, IPVA e IPTU num lugar só." />
       <Card
         titulo="Próximos vencimentos"
         acao={
           ag.dados && ag.dados.itens.length > 0 ? (
-            <button className="ghost small-btn" onClick={() => baixarIcs(ag.dados!.itens)}>
-              Levar para minha agenda
-            </button>
+            <Button variant="ghost" onClick={() => baixarIcs(ag.dados!.itens)}>
+              <Icone nome="calendario" tamanho={18} /> Levar para minha agenda
+            </Button>
           ) : undefined
         }
       >
         <Erro mensagem={ag.erro || erro} onTentar={() => void ag.recarregar()} />
-        {ag.dados && ag.dados.resumo.atrasados > 0 && <p className="notice">{ag.dados.resumo.atrasados} vencimento(s) em atraso.</p>}
-        {ag.dados && ag.dados.itens.length === 0 && (
-          <p className="muted">Nada por aqui. Ative MEI ou carnê-leão no perfil, ou adicione IPVA e IPTU abaixo.</p>
+        {ag.dados && ag.dados.resumo.atrasados > 0 && (
+          <Aviso tom="atencao">
+            {ag.dados.resumo.atrasados === 1 ? '1 vencimento passou' : `${ag.dados.resumo.atrasados} vencimentos passaram`}. Se já pagou, é só marcar.
+          </Aviso>
         )}
-        <ul className="lista agenda">
+        {ag.dados && ag.dados.itens.length === 0 && (
+          <p className="body-sm">Nada por aqui ainda. Ative MEI ou carnê-leão no perfil, ou adicione IPVA e IPTU logo abaixo.</p>
+        )}
+        <ul className="lista">
           {ag.dados?.itens.map((i) => (
-            <li key={`${i.tipo}-${i.competencia ?? i.id}`} className={i.atrasado ? 'atrasado' : i.pago ? 'pago' : ''}>
-              <span className="date">{dataBR(i.vencimento).slice(0, 5)}</span>
-              <span className="what">
+            <li key={`${i.tipo}-${i.competencia ?? i.id}`} className={i.pago ? 'apagado' : ''}>
+              <span className={`item-data${i.atrasado ? ' atrasado' : ''}`}>{dataLista(i.vencimento, hoje)}</span>
+              <div className="item-texto">
+                <span>{i.titulo}</span>
                 <span>
-                  {i.titulo}
-                  {i.previsto && <span className="badge">previsto</span>}
+                  {i.atrasado && <Tag tone="attention">Venceu</Tag>} {i.previsto && <Tag>Data prevista</Tag>}
                 </span>
-                {comDica.has(`${i.tipo}|${i.vencimento}`) && i.dica && <span className="muted small">{i.dica}</span>}
-              </span>
-              <span>{i.valorCents ? brl(i.valorCents) : ''}</span>
-              <label className="check">
-                <input type="checkbox" checked={i.pago} onChange={() => void alternar(i)} aria-label={`Pago: ${i.titulo} ${dataBR(i.vencimento)}`} />
-              </label>
+                {comExplicacao.has(`${i.tipo}|${i.vencimento}`) && O_QUE_E[i.tipo] && <OQueE termo={i.titulo}>{O_QUE_E[i.tipo]}</OQueE>}
+              </div>
+              <div className="item-valor">
+                {i.valorCents ? <Money cents={i.valorCents} /> : null}
+                <Chip selected={i.pago} aria-label={`Pago: ${i.titulo} ${dataLista(i.vencimento, hoje)}`} onClick={() => void alternar(i)}>
+                  {i.pago && <Icone nome="check" tamanho={16} />}
+                  {i.pago ? 'Pago' : 'Paguei'}
+                </Chip>
+              </div>
             </li>
           ))}
         </ul>
@@ -293,6 +323,7 @@ export function Agenda() {
         <NovoCompromisso onSalvo={() => void ag.recarregar()} />
       </Card>
       <Card titulo="À vista ou parcelado?">
+        <p className="body-sm">Descubra se o desconto à vista vale mais do que deixar o dinheiro rendendo.</p>
         <CalculadoraAvista />
       </Card>
       <Creditos />

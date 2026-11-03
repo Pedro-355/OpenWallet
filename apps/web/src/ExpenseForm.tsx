@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { UFS, calculateTax, isUF, type TaxRatesTable } from '@openwallet/tax';
 import { api, ApiError } from './api';
-import { brl, lastDay, parseMoney, pct, todayISO } from './format';
+import { lastDay, parseMoney, pct, todayISO } from './format';
+import { Button, Money } from './ds/componentes';
 
 /** Formulário de novo gasto, com prévia do imposto calculada no próprio aparelho. */
 export function ExpenseForm({ rates, defaultUf, month, onSaved }: { rates: TaxRatesTable; defaultUf: string; month: string; onSaved: () => Promise<void> }) {
@@ -81,19 +82,19 @@ export function ExpenseForm({ rates, defaultUf, month, onSaved }: { rates: TaxRa
         Descrição (opcional)
         <input maxLength={200} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Ex.: posto da esquina" />
       </label>
-      <p className="preview" aria-live="polite">
+      <p className="ow-note" aria-live="polite">
         {preview ? (
           <>
-            ≈ <strong>{brl(preview.totalCents)}</strong> de imposto ({pct(preview.ratePct)})
+            Cerca de <Money cents={preview.totalCents} size="sm" hidden={false} /> deste valor são impostos ({pct(preview.ratePct)}).
           </>
         ) : (
-          <span className="muted">Digite um valor para ver o imposto embutido.</span>
+          'Digite um valor para ver o imposto embutido.'
         )}
       </p>
-      {error && <p className="error">{error}</p>}
-      <button className="primary" disabled={busy}>
+      {error && <p className="error" role="alert">{error}</p>}
+      <Button variant="ink" type="submit" disabled={busy}>
         {busy ? 'Salvando…' : 'Adicionar gasto'}
-      </button>
+      </Button>
     </form>
   );
 }

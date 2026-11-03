@@ -1,8 +1,10 @@
 import { useState, type FormEvent } from 'react';
 import type { IRMensalResultado } from '@openwallet/tax';
-import { brl, parseReais, pct, todayISO } from '../format';
+import { dataLista, parseReais, pct, todayISO } from '../format';
 import { mvp, type Documento, type Rendimento } from '../mvpApi';
-import { anoCorrente, Cabecalho, Card, dataBR, Erro, useAcao, useCarregar } from './comum';
+import { Button, Chip, Iniciais, Money, OQueE, Tag } from '../ds/componentes';
+import { Icone } from '../ds/Icone';
+import { anoCorrente, Aviso, Cabecalho, Card, Erro, useAcao, useCarregar } from './comum';
 
 const TIPOS_DOC: Record<Documento['tipo'], string> = {
   saude: 'Saúde',
@@ -12,9 +14,9 @@ const TIPOS_DOC: Record<Documento['tipo'], string> = {
   outro: 'Outro',
 };
 const TIPOS_REND: Record<Rendimento['tipo'], string> = {
-  salario: 'Salário (CLT)',
-  autonomo_pf: 'Autônomo — pago por pessoa física',
-  autonomo_pj: 'Autônomo — pago por empresa',
+  salario: 'Salário (carteira assinada)',
+  autonomo_pf: 'Autônomo, pago por pessoa física',
+  autonomo_pj: 'Autônomo, pago por empresa',
   aluguel: 'Aluguel',
   mei: 'Faturamento do MEI',
   outro: 'Outro',
@@ -38,34 +40,46 @@ export function SimuladorMensal() {
       <div className="two">
         <label>
           Salário bruto (R$)
-          <input inputMode="decimal" value={bruto} onChange={(e) => setBruto(e.target.value)} placeholder="0,00" />
+          <input inputMode="decimal" value={bruto} onChange={(e) => setBruto(e.target.value)} placeholder="R$ 0,00" />
         </label>
         <label>
           Dependentes
           <input type="number" min={0} max={20} value={dependentes} onChange={(e) => setDependentes(e.target.value)} />
         </label>
       </div>
-      <button className="primary" disabled={ocupado}>
-        Calcular
-      </button>
+      <Button variant="ink" type="submit" disabled={ocupado}>
+        Calcular imposto do mês
+      </Button>
       <Erro mensagem={erro} />
       {r && (
-        <dl className="contas" aria-label="Resultado">
-          <dt>INSS</dt>
-          <dd>{brl(r.inssCents)}</dd>
-          <dt>IR pela tabela</dt>
-          <dd>{brl(r.impostoTabelaCents)}</dd>
-          <dt>Redução da Lei 15.270</dt>
-          <dd>− {brl(r.reducaoLei15270Cents)}</dd>
-          <dt>
-            <strong>IR no mês</strong>
-          </dt>
-          <dd>
-            <strong>{brl(r.impostoCents)}</strong> ({pct(r.aliquotaEfetivaPct)})
-          </dd>
-          <dt>Líquido</dt>
-          <dd>{brl(r.liquidoCents)}</dd>
-        </dl>
+        <ul className="lista" aria-label="Resultado">
+          <li>
+            <span className="item-texto">INSS</span>
+            <Money cents={-r.inssCents} signed />
+          </li>
+          <li>
+            <span className="item-texto">IR pela tabela</span>
+            <Money cents={r.impostoTabelaCents} />
+          </li>
+          <li>
+            <span className="item-texto">
+              <span>Redução da Lei 15.270</span>
+              <span className="caption">Desde 2026, quem ganha até R$ 5 mil fica isento e quem ganha até R$ 7.350 paga menos.</span>
+            </span>
+            <Money cents={r.reducaoLei15270Cents} signed />
+          </li>
+          <li>
+            <span className="item-texto">
+              <span>IR no mês</span>
+              <span className="label">{pct(r.aliquotaEfetivaPct)} do salário</span>
+            </span>
+            <Money cents={-r.impostoCents} signed />
+          </li>
+          <li>
+            <span className="item-texto">Salário líquido</span>
+            <Money cents={r.liquidoCents} />
+          </li>
+        </ul>
       )}
     </form>
   );
@@ -97,20 +111,21 @@ function NovoDocumento({ onSalvo }: { onSalvo: () => void }) {
 
   return (
     <form className="stack" onSubmit={salvar} aria-label="Novo recibo">
+      <div className="chips" role="group" aria-label="Tipo de recibo">
+        {(Object.keys(TIPOS_DOC) as Documento['tipo'][]).map((k) => (
+          <Chip key={k} selected={tipo === k} onClick={() => setTipo(k)}>
+            {TIPOS_DOC[k]}
+          </Chip>
+        ))}
+      </div>
       <div className="two">
         <label>
-          Tipo
-          <select value={tipo} onChange={(e) => setTipo(e.target.value as Documento['tipo'])}>
-            {Object.entries(TIPOS_DOC).map(([k, v]) => (
-              <option key={k} value={k}>
-                {v}
-              </option>
-            ))}
-          </select>
+          Valor do recibo (R$)
+          <input inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="R$ 0,00" />
         </label>
         <label>
-          Valor do recibo (R$)
-          <input inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="0,00" />
+          Pago em
+          <input type="date" value={pagoEm} onChange={(e) => setPagoEm(e.target.value)} />
         </label>
       </div>
       <div className="two">
@@ -123,19 +138,13 @@ function NovoDocumento({ onSalvo }: { onSalvo: () => void }) {
           <input inputMode="numeric" value={doc} onChange={(e) => setDoc(e.target.value)} />
         </label>
       </div>
-      <div className="two">
-        <label>
-          Pago em
-          <input type="date" value={pagoEm} onChange={(e) => setPagoEm(e.target.value)} />
-        </label>
-        <label>
-          Para quem (titular ou dependente)
-          <input value={beneficiario} onChange={(e) => setBeneficiario(e.target.value)} />
-        </label>
-      </div>
-      <button className="ghost" disabled={ocupado}>
+      <label>
+        Para quem (você ou um dependente)
+        <input value={beneficiario} onChange={(e) => setBeneficiario(e.target.value)} />
+      </label>
+      <Button variant="ink" type="submit" disabled={ocupado}>
         Guardar recibo
-      </button>
+      </Button>
       <Erro mensagem={erro} />
     </form>
   );
@@ -184,7 +193,7 @@ function NovoRendimento({ onSalvo }: { onSalvo: () => void }) {
         </label>
         <label>
           Valor bruto recebido (R$)
-          <input inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="0,00" />
+          <input inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="R$ 0,00" />
         </label>
       </div>
       <div className="two">
@@ -193,31 +202,34 @@ function NovoRendimento({ onSalvo }: { onSalvo: () => void }) {
           <input value={pagador} onChange={(e) => setPagador(e.target.value)} />
         </label>
         <label>
-          CPF/CNPJ de quem pagou
+          CPF ou CNPJ de quem pagou
           <input inputMode="numeric" value={doc} onChange={(e) => setDoc(e.target.value)} />
         </label>
       </div>
       <div className="two">
         <label>
           IR retido (R$)
-          <input inputMode="decimal" value={ir} onChange={(e) => setIr(e.target.value)} placeholder="0,00" />
+          <input inputMode="decimal" value={ir} onChange={(e) => setIr(e.target.value)} placeholder="R$ 0,00" />
         </label>
         <label>
           INSS descontado (R$)
-          <input inputMode="decimal" value={inss} onChange={(e) => setInss(e.target.value)} placeholder="0,00" />
+          <input inputMode="decimal" value={inss} onChange={(e) => setInss(e.target.value)} placeholder="R$ 0,00" />
         </label>
       </div>
       <label>
         Recebido em
         <input type="date" value={recebidoEm} onChange={(e) => setRecebidoEm(e.target.value)} />
       </label>
-      <button className="ghost" disabled={ocupado}>
+      <Button variant="ink" type="submit" disabled={ocupado}>
         Guardar rendimento
-      </button>
+      </Button>
       <Erro mensagem={erro} />
     </form>
   );
 }
+
+const TOM_ALERTA = { alto: 'attention', medio: 'attention', info: 'positive' } as const;
+const ROTULO_ALERTA = { alto: 'Risco alto', medio: 'Atenção', info: 'Tudo certo' } as const;
 
 export function Ir() {
   const [ano, setAno] = useState(anoCorrente());
@@ -234,101 +246,107 @@ export function Ir() {
 
   return (
     <div className="page">
-      <Cabecalho titulo="Imposto de Renda" subtitulo="Simule, guarde recibos ao longo do ano e evite a malha fina." />
+      <Cabecalho titulo="Imposto de Renda" subtitulo="Simule, guarde os recibos ao longo do ano e evite a malha fina." />
 
-      <Card titulo="Quanto vou pagar por mês?">
+      <Card titulo="Quanto sai do seu salário?">
         <SimuladorMensal />
       </Card>
 
       <Card
-        titulo={`Prévia da declaração ${(d?.exercicio ?? ano + 1)} (ano-base ${ano})`}
-        acao={
-          <select aria-label="Ano-base" value={ano} onChange={(e) => setAno(Number(e.target.value))} className="mini">
-            {[anoCorrente(), anoCorrente() - 1].map((a) => (
-              <option key={a}>{a}</option>
-            ))}
-          </select>
-        }
+        destaque
+        titulo={`Declaração de ${d?.exercicio ?? ano + 1}`}
       >
+        <div className="chips" role="group" aria-label="Ano-base">
+          {[anoCorrente() - 1, anoCorrente()].map((a) => (
+            <Chip key={a} selected={a === ano} onClick={() => setAno(a)}>
+              Ano-base {a}
+            </Chip>
+          ))}
+        </div>
         <Erro mensagem={declaracao.erro} onTentar={() => void declaracao.recarregar()} />
         {d && melhor && (
-          <div className="stack">
+          <>
             {d.contagem.rendimentos === 0 ? (
-              <p className="muted">Lance seus rendimentos abaixo para ver a prévia.</p>
+              <p className="body-sm">Lance seus rendimentos de {ano} logo abaixo para ver a prévia.</p>
             ) : (
-              <>
-                <p className="big-sm">
-                  {melhor.saldoCents >= 0 ? (
-                    <>
-                      <span className="accent">{brl(melhor.saldoCents)}</span> a restituir
-                    </>
-                  ) : (
-                    <>
-                      <span className="error">{brl(-melhor.saldoCents)}</span> a pagar
-                    </>
-                  )}
-                </p>
-                <p className="muted small">
-                  Melhor opção: declaração {d.resultado.melhor}
-                  {d.resultado.vantagemCents > 0 && ` (economia de ${brl(d.resultado.vantagemCents)})`}. Rendimentos tributáveis:{' '}
-                  {brl(d.entrada.rendimentosTributaveisCents)}.
-                </p>
-                {!d.resultado.obrigatoriedadeConfirmada && (
-                  <p className="muted small">O limite de obrigatoriedade de {d.exercicio} ainda não foi publicado pela Receita.</p>
-                )}
-              </>
+              <div className="valor-destaque">
+                <span className="label">{melhor.saldoCents >= 0 ? 'Você deve receber de volta' : 'Você deve pagar'}</span>
+                <Money cents={melhor.saldoCents} size="lg" signed />
+                <span className="body-sm">
+                  A declaração {d.resultado.melhor} sai melhor
+                  {d.resultado.vantagemCents > 0 && <> e economiza <Money cents={d.resultado.vantagemCents} size="sm" /></>}.
+                </span>
+              </div>
             )}
-            <h3>Riscos de malha fina</h3>
-            <ul className="alertas">
+            {!d.resultado.obrigatoriedadeConfirmada && (
+              <p className="caption">A Receita ainda não publicou quem é obrigado a declarar em {d.exercicio}. O app usa a regra do ano passado.</p>
+            )}
+            <div className="card-head">
+              <h3>Riscos de malha fina</h3>
+              <OQueE termo="malha fina">
+                Malha fina é quando a Receita segura a declaração para conferir algo que não bateu com o que empresas, médicos e bancos informaram.
+                A restituição atrasa até você explicar ou corrigir.
+              </OQueE>
+            </div>
+            <ul className="lista">
               {d.alertas.map((a) => (
-                <li key={a.codigo} className={`alerta ${a.nivel}`}>
-                  {a.mensagem}
+                <li key={a.codigo}>
+                  <div className="item-texto">
+                    <Tag tone={TOM_ALERTA[a.nivel]}>{ROTULO_ALERTA[a.nivel]}</Tag>
+                    <span className="body-sm">{a.mensagem}</span>
+                  </div>
                 </li>
               ))}
             </ul>
-          </div>
+          </>
         )}
       </Card>
 
-      <Card titulo="Rendimentos do ano">
+      <Card titulo={`Rendimentos de ${ano}`}>
         <NovoRendimento onSalvo={atualizar} />
         <ul className="lista">
           {rends.dados?.rendimentos.map((r) => (
             <li key={r.id}>
-              <span className="what">
+              <Iniciais nome={r.pagadorNome || TIPOS_REND[r.tipo]} />
+              <div className="item-texto">
                 <span>{TIPOS_REND[r.tipo]}</span>
-                <span className="muted small">
-                  {dataBR(r.recebidoEm)} · {r.pagadorNome || 'sem fonte pagadora'}
+                <span className="label">
+                  {dataLista(r.recebidoEm)} · {r.pagadorNome || 'sem fonte pagadora'}
                 </span>
-              </span>
-              <strong>{brl(r.valorCents)}</strong>
-              <button className="ghost icon" aria-label={`Apagar rendimento de ${dataBR(r.recebidoEm)}`} onClick={() => void mvp.apagarRendimento(r.id).then(atualizar)}>
-                ×
+              </div>
+              <Money cents={r.valorCents} signed />
+              <button type="button" className="icon-btn sem-borda" aria-label={`Apagar rendimento de ${dataLista(r.recebidoEm)}`} onClick={() => void mvp.apagarRendimento(r.id).then(atualizar)}>
+                <Icone nome="lixeira" tamanho={18} />
               </button>
             </li>
           ))}
         </ul>
       </Card>
 
-      <Card titulo="Pasta de recibos dedutíveis">
+      <Card titulo="Pasta de recibos">
+        <p className="body-sm">Guarde aqui o que pode abater do imposto: consultas, exames, escola, previdência privada.</p>
         <NovoDocumento onSalvo={atualizar} />
         <ul className="lista">
           {docs.dados?.documentos.map((r) => (
             <li key={r.id}>
-              <span className="what">
+              <Iniciais nome={r.prestadorNome} />
+              <div className="item-texto">
                 <span>{r.prestadorNome}</span>
-                <span className="muted small">
-                  {TIPOS_DOC[r.tipo]} · {dataBR(r.pagoEm)} · {r.prestadorDoc ? 'com CPF/CNPJ' : 'sem CPF/CNPJ'}
+                <span className="label">
+                  {TIPOS_DOC[r.tipo]} · {dataLista(r.pagoEm)}
                 </span>
-              </span>
-              <strong>{brl(r.valorCents)}</strong>
-              <button className="ghost icon" aria-label={`Apagar recibo de ${r.prestadorNome}`} onClick={() => void mvp.apagarDocumento(r.id).then(atualizar)}>
-                ×
+                {!r.prestadorDoc && <Tag tone="attention">Sem CPF ou CNPJ</Tag>}
+              </div>
+              <Money cents={r.valorCents} />
+              <button type="button" className="icon-btn sem-borda" aria-label={`Apagar recibo de ${r.prestadorNome}`} onClick={() => void mvp.apagarDocumento(r.id).then(atualizar)}>
+                <Icone nome="lixeira" tamanho={18} />
               </button>
             </li>
           ))}
         </ul>
       </Card>
+
+      {d && d.contagem.rendimentos > 0 && <Aviso>As contas são uma prévia. Quem fecha a declaração é você, no programa da Receita.</Aviso>}
     </div>
   );
 }

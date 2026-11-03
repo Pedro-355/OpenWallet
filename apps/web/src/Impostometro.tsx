@@ -4,9 +4,14 @@ import { api, auth, ApiError, type Connection, type Expense, type History, type 
 import { InstallBanner } from './InstallBanner';
 import { ExpenseForm } from './ExpenseForm';
 import { AnualCard } from './telas/AnualCard';
-import { brl, capitalize, dayLabel, lastDay, monthLong, monthShort, pct, shiftMonth, todayISO } from './format';
+import { Sugestoes } from './telas/Sugestoes';
+import { BotaoOcultar, Aviso } from './telas/comum';
+import type { Aba } from './telas/Navegacao';
+import { Button, Iniciais, Money, OQueE, Tag } from './ds/componentes';
+import { Icone } from './ds/Icone';
+import { dataLista, lastDay, mesAno, monthLong, monthShort, pct, shiftMonth, todayISO } from './format';
 
-export function Impostometro({ user, flash, onFlashSeen }: { user: User; flash?: string; onFlashSeen?: () => void }) {
+export function Impostometro({ user, flash, onFlashSeen, irPara }: { user: User; flash?: string; onFlashSeen?: () => void; irPara?: (a: Aba) => void }) {
   const [month, setMonth] = useState(() => todayISO().slice(0, 7));
   const [rates, setRates] = useState<TaxRatesTable | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -91,91 +96,93 @@ export function Impostometro({ user, flash, onFlashSeen }: { user: User; flash?:
   return (
     <div className="page">
       <header className="topbar">
-        <div>
-          <p className="eyebrow">OpenWallet</p>
-          <h1>Impostômetro</h1>
+        <div className="topbar-titulo">
+          <h1>Início</h1>
+          <p className="body-sm">Quanto do que você gasta vira imposto.</p>
         </div>
-        <div className="topbar-actions">
-          <label className="uf-pick" title="Estado usado no cálculo do ICMS">
-            UF
-            <select value={user.uf} onChange={(e) => void changeUf(e.target.value)}>
-              {UFS.map((u) => (
-                <option key={u}>{u}</option>
-              ))}
-            </select>
+        <div className="topbar-acoes">
+          <label className="sr-only" htmlFor="uf-perfil">
+            Seu estado
           </label>
-          <button className="ghost" onClick={() => void auth.logout()}>
-            Sair
+          <select id="uf-perfil" className="uf-pick" value={user.uf} onChange={(e) => void changeUf(e.target.value)} title="Estado usado no cálculo do ICMS">
+            {UFS.map((u) => (
+              <option key={u}>{u}</option>
+            ))}
+          </select>
+          <BotaoOcultar />
+          <button type="button" className="icon-btn sem-borda" aria-label="Sair" onClick={() => void auth.logout()}>
+            <Icone nome="sair" />
           </button>
         </div>
       </header>
 
       <InstallBanner />
 
-      <nav className="month-nav" aria-label="Mês">
-        <button className="ghost" onClick={() => setMonth(shiftMonth(month, -1))} aria-label="Mês anterior">
-          ‹
+      <nav className="mes-nav" aria-label="Mês">
+        <button type="button" className="icon-btn" onClick={() => setMonth(shiftMonth(month, -1))} aria-label="Mês anterior">
+          <Icone nome="voltar" />
         </button>
-        <strong>{capitalize(monthLong(month))}</strong>
-        <button className="ghost" onClick={() => setMonth(shiftMonth(month, 1))} disabled={isCurrentMonth} aria-label="Próximo mês">
-          ›
+        <span className="title-md">{mesAno(month)}</span>
+        <button type="button" className="icon-btn" onClick={() => setMonth(shiftMonth(month, 1))} disabled={isCurrentMonth} aria-label="Próximo mês">
+          <Icone nome="avancar" />
         </button>
       </nav>
 
-      {flash && <p className="notice ok">{flash}</p>}
-      {summary?.illustrative && (
-        <p className="notice">
-          Alíquotas ilustrativas: os valores ainda não vieram da tabela oficial do IBPT.
-        </p>
-      )}
+      {flash && <Aviso tom="ok">{flash}</Aviso>}
       {error && (
-        <p className="error">
-          {error} <button className="link" onClick={() => void load()}>Tentar de novo</button>
+        <p className="error" role="alert">
+          {error}{' '}
+          <button type="button" className="ow-link" onClick={() => void load()}>
+            Tentar de novo
+          </button>
         </p>
       )}
 
-      <section className="hero card" aria-busy={loading}>
-        <p className="muted">Neste mês, dos seus gastos foram para impostos</p>
-        <p className="big">{brl(summary?.totals.taxCents ?? 0)}</p>
-        <p className="muted">
-          de {brl(summary?.totals.spentCents ?? 0)} gastos ·{' '}
-          <strong className="accent">{pct(summary?.totals.effectivePct ?? 0)}</strong> do total
+      <section className="card destaque" aria-busy={loading}>
+        <span className="overline">Impostos em {monthLong(month)}</span>
+        <Money cents={summary?.totals.taxCents ?? 0} size="xl" />
+        <p className="body-sm">
+          de <Money cents={summary?.totals.spentCents ?? 0} size="sm" /> que você gastou ({pct(summary?.totals.effectivePct ?? 0)})
         </p>
         {summary && summary.totals.taxCents > 0 && <SphereBar s={summary} />}
-        <p className="muted small">No ano até aqui: {brl(summary?.yearToDate.taxCents ?? 0)} em impostos</p>
+        <p className="caption">
+          No ano, até agora: <Money cents={summary?.yearToDate.taxCents ?? 0} size="sm" /> em impostos.
+        </p>
+        {summary?.illustrative && <p className="caption">As alíquotas ainda são ilustrativas: a tabela oficial do IBPT entra antes do lançamento.</p>}
       </section>
+
+      {irPara && <Sugestoes irPara={irPara} />}
 
       <AnualCard versao={summary?.yearToDate.taxCents ?? 0} />
 
-      <div className="grid">
-        <section className="card">
-          <h2>Novo gasto</h2>
-          {rates ? <ExpenseForm rates={rates} defaultUf={user.uf} month={month} onSaved={load} /> : <p className="muted">Carregando…</p>}
-        </section>
+      <section className="card">
+        <h2>Novo gasto</h2>
+        {rates ? <ExpenseForm rates={rates} defaultUf={user.uf} month={month} onSaved={load} /> : <p className="caption">Carregando…</p>}
+      </section>
 
-        <section className="card">
-          <h2>Últimos meses</h2>
-          {history && <HistoryChart history={history} current={month} />}
-        </section>
-      </div>
+      <section className="card">
+        <h2>Últimos meses</h2>
+        {history && <HistoryChart history={history} current={month} />}
+      </section>
 
       {ofEnabled && <BankConnections connections={connections} onChange={load} />}
 
       <section className="card">
         <h2>Por categoria</h2>
-        {summary && summary.byCategory.length === 0 && <p className="muted">Nenhum gasto neste mês.</p>}
-        <ul className="cats">
+        {summary && summary.byCategory.length === 0 && <p className="body-sm">Nenhum gasto neste mês.</p>}
+        <ul className="lista">
           {summary?.byCategory.map((c) => (
             <li key={c.category}>
-              <div className="row">
+              <div className="item-texto">
                 <span>{c.label}</span>
-                <span>
-                  <strong>{brl(c.taxCents)}</strong> <span className="muted small">de {brl(c.spentCents)} · {pct(c.effectivePct)}</span>
+                <span className="label">
+                  {pct(c.effectivePct)} de <Money cents={c.spentCents} size="sm" />
                 </span>
+                <div className="ow-progress ow-progress--primary" role="presentation">
+                  <span className="ow-progress__fill" style={{ width: `${(c.taxCents / Math.max(1, summary.totals.taxCents)) * 100}%` }} />
+                </div>
               </div>
-              <div className="meter">
-                <span style={{ width: `${(c.taxCents / Math.max(1, summary.totals.taxCents)) * 100}%` }} />
-              </div>
+              <Money cents={c.taxCents} />
             </li>
           ))}
         </ul>
@@ -183,38 +190,38 @@ export function Impostometro({ user, flash, onFlashSeen }: { user: User; flash?:
 
       <section className="card">
         <h2>Gastos</h2>
-        {expenses.length === 0 && !loading && <p className="muted">Nada lançado em {monthLong(month)}.</p>}
-        <ul className="expenses">
+        {expenses.length === 0 && !loading && <p className="body-sm">Nada lançado em {monthLong(month)}.</p>}
+        <ul className="lista">
           {expenses.map((e) => (
             <li key={e.id}>
-              <span className="date">{dayLabel(e.spentOn)}</span>
-              <span className="what">
+              <div className="item-texto">
                 <span>{e.description || rates?.categories[e.category]?.label || e.category}</span>
-                <span className="muted small">
-                  {e.source === 'openfinance' && <span className="badge">Banco</span>}
-                  {rates?.categories[e.category]?.label ?? e.category} · {e.uf}
+                <span className="label">
+                  {dataLista(e.spentOn)} · {rates?.categories[e.category]?.label ?? e.category} · {e.uf}
                 </span>
-              </span>
-              <span className="amount">
-                <span>{brl(e.amountCents)}</span>
-                <span className="tax small">
-                  {brl(e.tax.totalCents)} imposto · {pct(e.tax.ratePct)}
+                {e.source === 'openfinance' && <Tag tone="primary">Banco</Tag>}
+                {e.source === 'nfce' && <Tag tone="primary">Nota</Tag>}
+              </div>
+              <div className="item-valor">
+                <Money cents={-e.amountCents} signed tone="neutral" />
+                <span className="label">
+                  <Money cents={e.tax.totalCents} size="sm" /> imposto
                 </span>
-              </span>
-              <button className="ghost icon" aria-label="Apagar" onClick={() => void remove(e.id)}>
-                ×
+              </div>
+              <button type="button" className="icon-btn sem-borda" aria-label="Apagar" onClick={() => void remove(e.id)}>
+                <Icone nome="lixeira" tamanho={18} />
               </button>
             </li>
           ))}
         </ul>
         {nextCursor && (
-          <button className="ghost wide" onClick={() => void loadMore()}>
-            Carregar mais
-          </button>
+          <Button variant="secondary" block onClick={() => void loadMore()}>
+            Carregar mais gastos
+          </Button>
         )}
       </section>
 
-      <footer className="muted small">
+      <footer className="rodape">
         Valores aproximados, conforme a Lei 12.741/2012. Fonte das alíquotas: {rates?.source ?? '—'}.
       </footer>
     </div>
@@ -244,82 +251,85 @@ function BankConnections({ connections, onChange }: { connections: Connection[];
     });
 
   const visible = connections.filter((c) => c.status !== 'revoked');
-  const statusLabel: Record<Connection['status'], string> = {
-    active: 'Conectado',
-    pending: 'Aguardando autorização',
-    error: 'Com erro',
-    rejected: 'Recusado',
-    revoked: 'Desconectado',
+  const statusLabel: Record<Connection['status'], { texto: string; tom: 'positive' | 'attention' | 'neutral' }> = {
+    active: { texto: 'Conectado', tom: 'positive' },
+    pending: { texto: 'Aguardando autorização', tom: 'neutral' },
+    error: { texto: 'Com erro', tom: 'attention' },
+    rejected: { texto: 'Recusado', tom: 'neutral' },
+    revoked: { texto: 'Desconectado', tom: 'neutral' },
   };
 
   return (
     <section className="card">
-      <div className="row">
+      <div className="card-head">
         <h2>Contas conectadas</h2>
-        <button className="primary small-btn" onClick={() => void connect()} disabled={!!busy}>
-          {busy === 'connect' ? 'Abrindo o banco…' : '+ Conectar banco'}
-        </button>
+        <OQueE termo="Open Finance">
+          Open Finance é o sistema do Banco Central que deixa você compartilhar seus dados bancários com outro app, só com a sua autorização, e
+          cancelar quando quiser.
+        </OQueE>
       </div>
-      {visible.length === 0 && (
-        <p className="muted">
-          Conecte seu cartão pelo Open Finance e os gastos entram aqui sozinhos, já com o imposto calculado.
-        </p>
-      )}
-      <ul className="conns">
+      {visible.length === 0 && <p className="body-sm">Conecte seu cartão pelo Open Finance e os gastos entram aqui sozinhos, já com o imposto calculado.</p>}
+      <ul className="lista">
         {visible.map((c) => (
           <li key={c.id}>
-            <span className={`dot ${c.status}`} />
-            <span className="what">
+            <Iniciais nome={c.institution} />
+            <div className="item-texto">
               <span>{c.institution}</span>
-              <span className="muted small">
-                {statusLabel[c.status]}
-                {c.lastSyncAt && ` · atualizado ${new Date(c.lastSyncAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`}
+              <span className="label">
+                {c.lastSyncAt ? `Atualizado ${dataLista(c.lastSyncAt.slice(0, 10))}` : 'Ainda sem atualização'}
               </span>
-              {c.status === 'error' && c.lastError && <span className="error small">{c.lastError}</span>}
-            </span>
-            {c.status === 'active' && (
-              <button className="ghost" disabled={!!busy} onClick={() => void run(c.id, async () => { await api.syncConnection(c.id); setTimeout(() => void onChange(), 2_000); })}>
-                {busy === c.id ? '…' : 'Atualizar'}
-              </button>
-            )}
-            <button
-              className="ghost"
-              disabled={!!busy}
-              onClick={() => {
-                if (window.confirm(`Desconectar ${c.institution}? Os gastos já importados continuam aqui.`)) {
-                  void run(`del-${c.id}`, async () => { await api.disconnect(c.id); await onChange(); });
-                }
-              }}
-            >
-              Desconectar
-            </button>
+              <Tag tone={statusLabel[c.status].tom}>{statusLabel[c.status].texto}</Tag>
+              {c.status === 'error' && c.lastError && <span className="error">{c.lastError}</span>}
+            </div>
+            <div className="item-valor">
+              {c.status === 'active' && (
+                <Button variant="secondary" disabled={!!busy} onClick={() => void run(c.id, async () => { await api.syncConnection(c.id); setTimeout(() => void onChange(), 2_000); })}>
+                  {busy === c.id ? 'Atualizando…' : 'Atualizar'}
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                disabled={!!busy}
+                onClick={() => {
+                  if (window.confirm(`Desconectar ${c.institution}? Os gastos já importados continuam aqui.`)) {
+                    void run(`del-${c.id}`, async () => { await api.disconnect(c.id); await onChange(); });
+                  }
+                }}
+              >
+                Desconectar
+              </Button>
+            </div>
           </li>
         ))}
       </ul>
       {error && <p className="error">{error}</p>}
-      <p className="muted small">Ambiente de teste: o "Banco Sandbox" gera compras fictícias automaticamente.</p>
+      <Button variant="ink" onClick={() => void connect()} disabled={!!busy}>
+        {busy === 'connect' ? 'Abrindo o banco…' : 'Conectar banco'}
+      </Button>
+      <p className="caption">Ambiente de teste: o Banco Sandbox gera compras fictícias.</p>
     </section>
   );
 }
 
+/** Divisão do imposto por esfera: primary-strong, chart-2 e ink-muted, sempre com rótulo e valor. */
 function SphereBar({ s }: { s: Summary }) {
   const t = s.totals;
   const parts = [
-    { key: 'fed', label: 'Federal', cents: t.federalCents },
-    { key: 'est', label: 'Estadual (ICMS)', cents: t.estadualCents },
-    { key: 'mun', label: 'Municipal (ISS)', cents: t.municipalCents },
+    { key: 'serie-1', label: 'Federal', cents: t.federalCents },
+    { key: 'serie-2', label: 'Estadual (ICMS)', cents: t.estadualCents },
+    { key: 'serie-3', label: 'Municipal (ISS)', cents: t.municipalCents },
   ].filter((p) => p.cents > 0);
   return (
-    <div className="spheres">
-      <div className="stacked">
+    <div className="stack">
+      <div className="barra-dividida" aria-hidden="true">
         {parts.map((p) => (
           <span key={p.key} className={p.key} style={{ width: `${(p.cents / t.taxCents) * 100}%` }} />
         ))}
       </div>
-      <ul className="legend">
+      <ul className="legenda">
         {parts.map((p) => (
           <li key={p.key}>
-            <i className={p.key} /> {p.label} <strong>{brl(p.cents)}</strong>
+            <i className={p.key} /> {p.label} <Money cents={p.cents} size="sm" />
           </li>
         ))}
       </ul>
@@ -330,12 +340,12 @@ function SphereBar({ s }: { s: Summary }) {
 function HistoryChart({ history, current }: { history: History; current: string }) {
   const max = Math.max(1, ...history.months.map((m) => m.taxCents));
   return (
-    <div className="history">
+    <div className="historico">
       {history.months.map((m) => (
-        <div key={m.month} className={`bar ${m.month === current ? 'current' : ''}`} title={`${monthLong(m.month)}: ${brl(m.taxCents)}`}>
-          <span className="value small">{m.taxCents ? brl(m.taxCents).replace(/,\d\d$/, '') : ''}</span>
-          <span className="fill" style={{ height: `${(m.taxCents / max) * 100}%` }} />
-          <span className="label small">{monthShort(m.month)}</span>
+        <div key={m.month} className={`barra ${m.month === current ? 'atual' : ''}`} title={`${monthLong(m.month)}`}>
+          <span className="topo">{m.taxCents ? <Money cents={m.taxCents} size="sm" compact /> : ''}</span>
+          <span className="preenche" style={{ height: `${(m.taxCents / max) * 100}%` }} />
+          <span className="rotulo">{monthShort(m.month)}</span>
         </div>
       ))}
     </div>

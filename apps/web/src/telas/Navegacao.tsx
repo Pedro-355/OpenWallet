@@ -1,21 +1,23 @@
+import { Icone, type NomeIcone } from '../ds/Icone';
+
 export type Aba = 'inicio' | 'notas' | 'ir' | 'agenda' | 'mei' | 'ajuda';
 
-export const ABAS: { id: Aba; rotulo: string; icone: string }[] = [
-  { id: 'inicio', rotulo: 'Início', icone: '◎' },
-  { id: 'notas', rotulo: 'Notas', icone: '▦' },
-  { id: 'ir', rotulo: 'IR', icone: '§' },
-  { id: 'agenda', rotulo: 'Agenda', icone: '◷' },
-  { id: 'mei', rotulo: 'MEI', icone: '▲' },
-  { id: 'ajuda', rotulo: 'Ajuda', icone: '?' },
+export const ABAS: { id: Aba; rotulo: string; icone: NomeIcone }[] = [
+  { id: 'inicio', rotulo: 'Início', icone: 'inicio' },
+  { id: 'notas', rotulo: 'Notas', icone: 'notas' },
+  { id: 'ir', rotulo: 'IR', icone: 'ir' },
+  { id: 'agenda', rotulo: 'Agenda', icone: 'agenda' },
+  { id: 'mei', rotulo: 'MEI', icone: 'mei' },
+  { id: 'ajuda', rotulo: 'Ajuda', icone: 'ajuda' },
 ];
 
-/** Barra de abas fixa no rodapé (no celular) para navegar entre as funções do app. */
+/** Abas fixas no rodapé. A aba ativa usa primary (a única cor de marca da tela). */
 export function Navegacao({ atual, onTrocar }: { atual: Aba; onTrocar: (a: Aba) => void }) {
   return (
     <nav className="abas" aria-label="Seções">
       {ABAS.map((a) => (
-        <button key={a.id} className={a.id === atual ? 'ativa' : ''} aria-current={a.id === atual ? 'page' : undefined} onClick={() => onTrocar(a.id)}>
-          <span aria-hidden="true">{a.icone}</span>
+        <button key={a.id} type="button" aria-current={a.id === atual ? 'page' : undefined} onClick={() => onTrocar(a.id)}>
+          <Icone nome={a.icone} tamanho={22} />
           {a.rotulo}
         </button>
       ))}

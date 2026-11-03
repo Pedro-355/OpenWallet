@@ -1,0 +1,92 @@
+/* Gerado por `npm run ds:tokens` a partir de docs/design-system/tokens.json. Não edite à mão. */
+:root {
+  color-scheme: light;
+  --surface: #f3f2ee;
+  --surface-raised: #ffffff;
+  --surface-sunken: #eeece6;
+  --line: #e4e2db;
+  --line-strong: #dad8d0;
+  --ink: #121212;
+  --ink-soft: #3d3d3a;
+  --ink-muted: #5e5e5a;
+  --on-ink: #f3f2ee;
+  --primary: #2445e6;
+  --on-primary: #ffffff;
+  --primary-strong: #1a33b0;
+  --primary-soft: #eef0fd;
+  --positive: #17694a;
+  --positive-soft: #e3f1ea;
+  --negative: #b23a0b;
+  --attention: #8a4310;
+  --attention-soft: #fbebdd;
+  --chart-2: #e08a3c;
+  --focus-ring: 0 0 0 2px #f3f2ee, 0 0 0 4px #2445e6;
+  --link: var(--primary);
+  --font-sans: Geist, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 20px;
+  --radius-xl: 24px;
+  --radius-pill: 999px;
+  --touch-min: 44px;
+  --button-lg: 52px;
+  --screen-width: 390px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --surface: #121311;
+    --surface-raised: #1c1d1a;
+    --surface-sunken: #262724;
+    --line: #2f302c;
+    --line-strong: #4a4b46;
+    --ink: #f1f0ec;
+    --ink-soft: #c9c8c2;
+    --ink-muted: #a3a29c;
+    --on-ink: #121311;
+    --primary: #7b93ff;
+    --on-primary: #0b1033;
+    --primary-strong: #a9b8ff;
+    --primary-soft: #1a2150;
+    --positive: #6fd3a0;
+    --positive-soft: #10291e;
+    --negative: #ff9a66;
+    --attention: #f2b27a;
+    --attention-soft: #33190a;
+    --chart-2: #e89a52;
+    --focus-ring: 0 0 0 2px #121311, 0 0 0 4px #7b93ff;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --surface: #121311;
+  --surface-raised: #1c1d1a;
+  --surface-sunken: #262724;
+  --line: #2f302c;
+  --line-strong: #4a4b46;
+  --ink: #f1f0ec;
+  --ink-soft: #c9c8c2;
+  --ink-muted: #a3a29c;
+  --on-ink: #121311;
+  --primary: #7b93ff;
+  --on-primary: #0b1033;
+  --primary-strong: #a9b8ff;
+  --primary-soft: #1a2150;
+  --positive: #6fd3a0;
+  --positive-soft: #10291e;
+  --negative: #ff9a66;
+  --attention: #f2b27a;
+  --attention-soft: #33190a;
+  --chart-2: #e89a52;
+  --focus-ring: 0 0 0 2px #121311, 0 0 0 4px #7b93ff;
+}

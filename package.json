@@ -23,7 +23,8 @@
     "test:unit": "vitest run --project \"unit:*\"",
     "test:integration": "vitest run --project \"integration:*\"",
     "test:watch": "vitest --project \"unit:*\"",
-    "test:coverage": "vitest run --project \"unit:*\" --coverage"
+    "test:coverage": "vitest run --project \"unit:*\" --coverage",
+    "ds:tokens": "tsx scripts/ds-tokens.ts"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",

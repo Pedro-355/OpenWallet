@@ -46,3 +46,25 @@ export function parseReais(input: string): number | null {
   if (/^\d{1,3}(\.\d{3})+$/.test(t)) return parseMoney(t.replace(/\./g, ''));
   return parseMoney(t);
 }
+
+const MESES_CURTOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+
+/** Data em listas, como pede o design system: "Hoje", "Ontem", "28 out" (e o ano se não for o atual). */
+export function dataLista(iso: string, hoje = todayISO()): string {
+  if (iso === hoje) return 'Hoje';
+  const ontem = new Date(`${hoje}T12:00:00Z`);
+  ontem.setUTCDate(ontem.getUTCDate() - 1);
+  if (iso === ontem.toISOString().slice(0, 10)) return 'Ontem';
+  const base = `${Number(iso.slice(8, 10))} ${MESES_CURTOS[Number(iso.slice(5, 7)) - 1]}`;
+  return iso.slice(0, 4) === hoje.slice(0, 4) ? base : `${base} ${iso.slice(0, 4)}`;
+}
+
+/** Data por extenso: "Hoje, 28 de outubro" / "3 de novembro de 2027". */
+export function dataExtenso(iso: string, hoje = todayISO()): string {
+  const d = `${Number(iso.slice(8, 10))} de ${MONTHS_LONG[Number(iso.slice(5, 7)) - 1]}`;
+  if (iso === hoje) return `Hoje, ${d}`;
+  return iso.slice(0, 4) === hoje.slice(0, 4) ? d : `${d} de ${iso.slice(0, 4)}`;
+}
+
+/** Mês no formato do design system: "Out 2026". */
+export const mesAno = (ym: string) => `${capitalize(MESES_CURTOS[Number(ym.slice(5, 7)) - 1] ?? '')} ${ym.slice(0, 4)}`;
