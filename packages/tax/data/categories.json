@@ -1,0 +1,66 @@
+{
+  "$comment": "Mapeia cada categoria do app para códigos da tabela IBPT. 'tipo': 0 = NCM (mercadorias), 1 = NBS, 2 = LC 116 (serviços). 'prefixos' casa pelo início do código (pontos são ignorados). Prefixo vazio = todos os códigos daquele tipo. 'ilustrativo' é usado só até a primeira importação real. CONFIRA os códigos antes de usar em produção.",
+  "fallbackCategory": "outros",
+  "categories": {
+    "mercado": {
+      "label": "Mercado",
+      "match": [{ "tipo": "0", "prefixos": ["1006", "0713", "0401", "0901", "1101", "1902", "0201", "0202", "0207", "1701", "1507"] }],
+      "ilustrativo": { "federal": 8, "estadual": 10 }
+    },
+    "restaurante": {
+      "label": "Restaurante e lanches",
+      "match": [{ "tipo": "0", "prefixos": ["1905", "2106"] }],
+      "ilustrativo": { "federal": 13, "estadual": 12 }
+    },
+    "bebidas": {
+      "label": "Bebidas",
+      "match": [{ "tipo": "0", "prefixos": ["2201", "2202", "2203", "2204", "2208"] }],
+      "ilustrativo": { "federal": 25, "estadual": 20 }
+    },
+    "combustivel": {
+      "label": "Combustível",
+      "match": [{ "tipo": "0", "prefixos": ["27101259", "27101921", "22071"] }],
+      "ilustrativo": { "federal": 15, "estadual": 25 }
+    },
+    "transporte": {
+      "label": "Transporte e apps",
+      "match": [{ "tipo": "2", "prefixos": ["1601", "1602"] }],
+      "ilustrativo": { "federal": 10, "estadual": 0, "municipal": 5 }
+    },
+    "moradia": {
+      "label": "Contas da casa (luz, gás)",
+      "match": [{ "tipo": "0", "prefixos": ["2716", "2711"] }],
+      "ilustrativo": { "federal": 9, "estadual": 20 }
+    },
+    "eletronicos": {
+      "label": "Eletrônicos",
+      "match": [{ "tipo": "0", "prefixos": ["8517", "8471", "8528", "8518"] }],
+      "ilustrativo": { "federal": 20, "estadual": 18 }
+    },
+    "vestuario": {
+      "label": "Roupas e calçados",
+      "match": [{ "tipo": "0", "prefixos": ["61", "62", "6403", "6404"] }],
+      "ilustrativo": { "federal": 15, "estadual": 18 }
+    },
+    "saude": {
+      "label": "Farmácia e saúde",
+      "match": [{ "tipo": "0", "prefixos": ["3004"] }],
+      "ilustrativo": { "federal": 12, "estadual": 15 }
+    },
+    "beleza": {
+      "label": "Higiene e beleza",
+      "match": [{ "tipo": "0", "prefixos": ["3303", "3304", "3305", "3306", "3401"] }],
+      "ilustrativo": { "federal": 20, "estadual": 18 }
+    },
+    "servicos": {
+      "label": "Serviços",
+      "match": [{ "tipo": "2", "prefixos": ["06", "14"] }],
+      "ilustrativo": { "federal": 13, "estadual": 0, "municipal": 5 }
+    },
+    "outros": {
+      "label": "Outros",
+      "match": [{ "tipo": "0", "prefixos": [""] }],
+      "ilustrativo": { "federal": 13, "estadual": 17 }
+    }
+  }
+}

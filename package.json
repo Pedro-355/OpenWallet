@@ -1,0 +1,39 @@
+{
+  "name": "openwallet",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "npm run build -w @openwallet/tax && npm run build -w @openwallet/openfinance-mock && npm run build -w @openwallet/api && npm run build -w @openwallet/web",
+    "typecheck": "npm run build -w @openwallet/tax && npm run build -w @openwallet/openfinance-mock && npm run typecheck --workspaces --if-present",
+    "test": "vitest run",
+    "dev:api": "npm run dev -w @openwallet/api",
+    "dev:web": "npm run dev -w @openwallet/web",
+    "dev:worker": "npm run dev:worker -w @openwallet/api",
+    "dev:bank": "npm run dev -w @openwallet/openfinance-mock",
+    "migrate": "npm run migrate -w @openwallet/api",
+    "import:ibpt": "node scripts/import-ibpt.mjs",
+    "test:unit": "vitest run --project \"unit:*\"",
+    "test:integration": "vitest run --project \"integration:*\"",
+    "test:watch": "vitest --project \"unit:*\"",
+    "test:coverage": "vitest run --project \"unit:*\" --coverage"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.8",
+    "@vitejs/plugin-react": "^5.2.0",
+    "@vitest/coverage-v8": "^4.1.12",
+    "fast-check": "^4.10.2",
+    "jsdom": "^27.4.0",
+    "msw": "^2.15.0",
+    "vitest": "^4.1.12"
+  }
+}

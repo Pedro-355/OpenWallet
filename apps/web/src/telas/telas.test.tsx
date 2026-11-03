@@ -1,0 +1,426 @@
+import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ApiError } from '../api';
+import { criarMvpFalso, umPerfil } from '../test/mvpMock';
+
+const falso = criarMvpFalso();
+vi.mock('../mvpApi', () => ({ mvp: falso }));
+
+const { Notas } = await import('./Notas');
+const { Ir } = await import('./Ir');
+const { Agenda, gerarIcs } = await import('./Agenda');
+const { Mei } = await import('./Mei');
+const { Ajuda } = await import('./Ajuda');
+const { AnualCard } = await import('./AnualCard');
+const { Navegacao } = await import('./Navegacao');
+
+beforeEach(() => {
+  Object.values(falso).forEach((f) => f.mockReset());
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-11-03T15:00:00Z'));
+});
+
+const cashbackPadrao = {
+  perfilPreenchido: true,
+  gastosConsiderados: 2,
+  elegibilidade: { elegivel: true, motivos: [], rendaPerCapitaCents: 50_000, limitePerCapitaCents: 81_050 },
+  estimativa: { vigente: false, potencialCents: 3_742, totalComCpfCents: 2_863, perdidoSemCpfCents: 879, porCategoria: [], aliquotasEstimadas: { cbsPct: 8.8, ibsPct: 17.7 } },
+};
+
+describe('Navegação', () => {
+  it('marca a aba atual e troca de aba', async () => {
+    const onTrocar = vi.fn();
+    render(<Navegacao atual="ir" onTrocar={onTrocar} />);
+
+    expect(screen.getByRole('button', { name: /IR/ })).toHaveAttribute('aria-current', 'page');
+    await userEvent.click(screen.getByRole('button', { name: /Agenda/ }));
+    expect(onTrocar).toHaveBeenCalledWith('agenda');
+  });
+});
+
+describe('Notas e cashback', () => {
+  beforeEach(() => {
+    falso.notas.mockResolvedValue({ notas: [{ chave: 'k', uf: 'SP', emitenteNome: 'MERCADO X', emitidaEm: '2026-10-03', valorCents: 18_790, cpfNaNota: false }], resumo: { total: 1, semCpf: 1 } });
+    falso.cashback.mockResolvedValue(cashbackPadrao);
+  });
+
+  it('mostra o cashback estimado e o que se perde sem CPF', async () => {
+    render(<Notas />);
+
+    expect(await screen.findByText('Sua família tem direito ao cashback.')).toBeInTheDocument();
+    expect(screen.getByText(/R\$\s*37,42/)).toBeInTheDocument();
+    expect(screen.getByText(/R\$\s*8,79 ficariam para trás/)).toBeInTheDocument();
+    expect(screen.getByText(/MERCADO X/)).toBeInTheDocument();
+    expect(screen.getByText(/SP · sem CPF/)).toBeInTheDocument();
+  });
+
+  it('registra a nota digitada com o valor informado', async () => {
+    falso.lerNota.mockResolvedValue({ nota: { emitenteNome: 'FARMACIA', valorCents: 10_000 }, gastos: [{ categoria: 'saude', valorCents: 10_000, impostoCents: 2_700 }] });
+    const user = userEvent.setup();
+    render(<Notas />);
+
+    await user.type(screen.getByLabelText(/chave de acesso/i), '3526 1011');
+    await user.type(screen.getByLabelText(/valor total/i), '100,00');
+    await user.click(screen.getByRole('button', { name: 'Registrar nota' }));
+
+    expect(falso.lerNota).toHaveBeenCalledWith('3526 1011', 10_000);
+    expect(await screen.findByText(/FARMACIA registrada/)).toBeInTheDocument();
+    expect(falso.notas).toHaveBeenCalledTimes(2);
+  });
+
+  it('mostra o erro da API quando a nota é inválida', async () => {
+    falso.lerNota.mockRejectedValue(new ApiError(400, 'nota_invalida', 'Dígito verificador não confere'));
+    const user = userEvent.setup();
+    render(<Notas />);
+
+    await user.type(screen.getByLabelText(/chave de acesso/i), '123');
+    await user.click(screen.getByRole('button', { name: 'Registrar nota' }));
+
+    expect(await screen.findByText(/Dígito verificador/)).toBeInTheDocument();
+  });
+
+  it('quem não tem direito vê os motivos', async () => {
+    falso.cashback.mockResolvedValue({ ...cashbackPadrao, perfilPreenchido: false, elegibilidade: { ...cashbackPadrao.elegibilidade, elegivel: false, motivos: ['Precisa do CadÚnico.'] } });
+    render(<Notas />);
+
+    expect(await screen.findByText(/Precisa do CadÚnico/)).toBeInTheDocument();
+    expect(screen.getByText(/Preencha o perfil/)).toBeInTheDocument();
+  });
+});
+
+describe('Imposto de Renda', () => {
+  const declaracao = {
+    ano: 2026, exercicio: 2027,
+    entrada: { rendimentosTributaveisCents: 6_680_000, impostoPagoCents: 420_000 },
+    resultado: {
+      melhor: 'completa', vantagemCents: 598, obrigadoADeclarar: true, obrigatoriedadeConfirmada: false, limitesAplicados: [],
+      completa: { saldoCents: 233_318 }, simplificada: { saldoCents: 232_720 },
+    },
+    alertas: [{ nivel: 'alto', codigo: 'saude_sem_documento', mensagem: 'Despesa médica sem CPF/CNPJ', itens: ['d1'] }],
+    contagem: { rendimentos: 1, recibos: 1 },
+  };
+  beforeEach(() => {
+    falso.declaracao.mockResolvedValue(declaracao);
+    falso.documentos.mockResolvedValue({ documentos: [{ id: 'd1', tipo: 'saude', valorCents: 45_000, pagoEm: '2026-05-10', prestadorNome: 'Dra. Ana', prestadorDoc: null, beneficiario: 'Titular' }] });
+    falso.rendimentos.mockResolvedValue({ rendimentos: [{ id: 'r1', tipo: 'salario', valorCents: 6_500_000, recebidoEm: '2026-10-31', pagadorNome: 'Empresa', pagadorDoc: '1', irRetidoCents: 0, inssCents: 0 }] });
+  });
+
+  it('mostra restituição, melhor modelo e riscos de malha', async () => {
+    render(<Ir />);
+
+    expect(await screen.findByText(/a restituir/)).toBeInTheDocument();
+    expect(screen.getByText(/declaração completa/)).toBeInTheDocument();
+    expect(screen.getByText('Despesa médica sem CPF/CNPJ')).toBeInTheDocument();
+    expect(screen.getByText(/ainda não foi publicado/)).toBeInTheDocument();
+  });
+
+  it('imposto a pagar aparece como tal', async () => {
+    falso.declaracao.mockResolvedValue({ ...declaracao, resultado: { ...declaracao.resultado, completa: { saldoCents: -10_000 } } });
+    render(<Ir />);
+
+    expect(await screen.findByText(/a pagar/)).toBeInTheDocument();
+  });
+
+  it('sem rendimentos pede para lançar', async () => {
+    falso.declaracao.mockResolvedValue({ ...declaracao, contagem: { rendimentos: 0, recibos: 0 } });
+    render(<Ir />);
+
+    expect(await screen.findByText(/Lance seus rendimentos/)).toBeInTheDocument();
+  });
+
+  it('simulador mensal mostra o redutor', async () => {
+    falso.simularMensal.mockResolvedValue({ resultado: { inssCents: 64_151, impostoTabelaCents: 56_485, reducaoLei15270Cents: 17_975, impostoCents: 38_510, aliquotaEfetivaPct: 6.42, liquidoCents: 497_339 } });
+    const user = userEvent.setup();
+    render(<Ir />);
+
+    await user.type(screen.getByLabelText('Salário bruto (R$)'), '6.000');
+    await user.click(screen.getByRole('button', { name: 'Calcular' }));
+
+    expect(falso.simularMensal).toHaveBeenCalledWith({ brutoCents: 600_000, dependentes: 0 });
+    expect(within(await screen.findByLabelText('Resultado')).getByText(/385,10/)).toBeInTheDocument();
+  });
+
+  it('guarda recibo e rendimento e recarrega a prévia', async () => {
+    falso.criarDocumento.mockResolvedValue({});
+    falso.criarRendimento.mockResolvedValue({});
+    const user = userEvent.setup();
+    render(<Ir />);
+    await screen.findByText(/a restituir/);
+
+    const recibo = screen.getByRole('form', { name: 'Novo recibo' });
+    await user.type(within(recibo).getByLabelText(/Valor do recibo/), '200');
+    await user.type(within(recibo).getByLabelText(/Quem recebeu/), 'Clínica');
+    await user.click(within(recibo).getByRole('button', { name: 'Guardar recibo' }));
+    expect(falso.criarDocumento).toHaveBeenCalledWith(expect.objectContaining({ tipo: 'saude', valorCents: 20_000, prestadorNome: 'Clínica', prestadorDoc: null }));
+
+    const rend = screen.getByRole('form', { name: 'Novo rendimento' });
+    await user.type(within(rend).getByLabelText(/Valor bruto/), '5000');
+    await user.type(within(rend).getByLabelText(/IR retido/), '100');
+    await user.click(within(rend).getByRole('button', { name: 'Guardar rendimento' }));
+    expect(falso.criarRendimento).toHaveBeenCalledWith(expect.objectContaining({ tipo: 'salario', valorCents: 500_000, irRetidoCents: 10_000, inssCents: 0 }));
+    await waitFor(() => expect(falso.declaracao).toHaveBeenCalledTimes(3));
+  });
+
+  it('apaga recibo e rendimento', async () => {
+    falso.apagarDocumento.mockResolvedValue(undefined);
+    falso.apagarRendimento.mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<Ir />);
+
+    await user.click(await screen.findByRole('button', { name: /Apagar recibo de Dra. Ana/ }));
+    await user.click(screen.getByRole('button', { name: /Apagar rendimento/ }));
+
+    expect(falso.apagarDocumento).toHaveBeenCalledWith('d1');
+    expect(falso.apagarRendimento).toHaveBeenCalledWith('r1');
+  });
+});
+
+describe('Agenda', () => {
+  const itens = [
+    { id: null, origem: 'automatica', tipo: 'das_mei', titulo: 'DAS do MEI', vencimento: '2026-10-20', competencia: '2026-09', valorCents: 8_605, pago: false, previsto: false, dica: 'Pague pelo app', atrasado: true, descontoAvistaPct: null, parcelas: null },
+    { id: null, origem: 'automatica', tipo: 'das_mei', titulo: 'DAS do MEI', vencimento: '2026-11-19', competencia: '2026-10', valorCents: 8_605, pago: false, previsto: false, dica: 'Pague pelo app', atrasado: false, descontoAvistaPct: null, parcelas: null },
+    { id: 'o1', origem: 'manual', tipo: 'ipva', titulo: 'IPVA, do carro', vencimento: '2027-01-21', competencia: null, valorCents: 285_000, pago: false, previsto: true, dica: '', atrasado: false, descontoAvistaPct: 3, parcelas: 5 },
+  ];
+  beforeEach(() => {
+    falso.agenda.mockResolvedValue({ itens, resumo: { atrasados: 1, proximos7dias: 0 } });
+    falso.creditos.mockResolvedValue({ creditos: [{ id: 'c1', origem: 'restituicao_ir', descricao: null, valorCents: 85_000, previstoPara: '2027-06-30', status: 'previsto' }] });
+    falso.pendencias.mockResolvedValue({ ambiente: 'teste', pendencias: [{ orgao: 'Estado', descricao: 'IPVA em atraso', valorCents: 50_000, situacao: 'em_aberto', comoResolver: 'Pague no site' }], ondeConferir: [{ nome: 'Regularize', url: 'https://www.regularize.pgfn.gov.br' }] });
+  });
+
+  it('lista vencimentos, atrasos, créditos e pendências; a dica aparece uma vez por tipo', async () => {
+    render(<Agenda />);
+
+    expect(await screen.findByText(/1 vencimento\(s\) em atraso/)).toBeInTheDocument();
+    expect(screen.getAllByText('Pague pelo app')).toHaveLength(1);
+    expect(screen.getByText('previsto')).toBeInTheDocument();
+    expect(await screen.findByText(/IPVA em atraso/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Regularize' })).toHaveAttribute('href', 'https://www.regularize.pgfn.gov.br');
+    expect(await screen.findByText(/A receber/)).toHaveTextContent('850,00');
+  });
+
+  it('marca recorrente e manual como pagos', async () => {
+    falso.pagarRecorrente.mockResolvedValue({ pago: true });
+    falso.pagarCompromisso.mockResolvedValue({});
+    const user = userEvent.setup();
+    render(<Agenda />);
+
+    await user.click(await screen.findByLabelText('Pago: DAS do MEI 19/11/2026'));
+    await user.click(screen.getByLabelText('Pago: IPVA, do carro 21/01/2027'));
+
+    expect(falso.pagarRecorrente).toHaveBeenCalledWith({ tipo: 'das_mei', competencia: '2026-10', vencimento: '2026-11-19', pago: true, valorCents: 8_605 });
+    expect(falso.pagarCompromisso).toHaveBeenCalledWith('o1', true);
+  });
+
+  it('adiciona IPVA, crédito e marca crédito recebido', async () => {
+    falso.criarCompromisso.mockResolvedValue({ id: 'n' });
+    falso.criarCredito.mockResolvedValue({});
+    falso.marcarCredito.mockResolvedValue({});
+    const user = userEvent.setup();
+    render(<Agenda />);
+    await screen.findByText(/vencimento\(s\) em atraso/);
+
+    const form = screen.getByRole('form', { name: 'Novo compromisso' });
+    await user.type(within(form).getByLabelText('Vencimento'), '2027-03-10');
+    await user.type(within(form).getByLabelText('Valor (R$)'), '1.900');
+    await user.click(within(form).getByRole('button', { name: 'Adicionar à agenda' }));
+    expect(falso.criarCompromisso).toHaveBeenCalledWith({ tipo: 'ipva', titulo: 'IPVA', vencimento: '2027-03-10', valorCents: 190_000 });
+
+    await user.type(screen.getByLabelText('Valor a receber'), '50');
+    await user.click(screen.getByRole('button', { name: '+' }));
+    expect(falso.criarCredito).toHaveBeenCalledWith({ origem: 'restituicao_ir', valorCents: 5_000 });
+
+    await user.click(await screen.findByRole('button', { name: 'Recebi' }));
+    expect(falso.marcarCredito).toHaveBeenCalledWith('c1', 'recebido');
+  });
+
+  it('calculadora à vista ou parcelado', async () => {
+    falso.avistaOuParcelado.mockResolvedValue({ resultado: { avistaCents: 270_000, economiaAvistaCents: 30_000, recomendacao: 'avista', explicacao: 'O desconto vale a pena.', jurosImplicitoMensalPct: 5, parceladoTotalCents: 300_000 } });
+    const user = userEvent.setup();
+    render(<Agenda />);
+
+    const form = screen.getByRole('form', { name: 'À vista ou parcelado' });
+    await user.type(within(form).getByLabelText('Valor total (R$)'), '3000');
+    await user.click(within(form).getByRole('button', { name: 'Comparar' }));
+
+    expect(await screen.findByText(/Pague à vista/)).toBeInTheDocument();
+    expect(falso.avistaOuParcelado).toHaveBeenCalledWith({ valorCents: 300_000, descontoAvistaPct: 3, parcelas: 10, rendimentoMensalPct: 1 });
+  });
+
+  it('gera .ics só com o que não foi pago, escapando vírgulas, e com lembrete 2 dias antes', () => {
+    const ics = gerarIcs([...itens, { ...itens[1]!, competencia: '2026-11', pago: true }] as never);
+
+    expect(ics.match(/BEGIN:VEVENT/g)).toHaveLength(3);
+    expect(ics).toContain('DTSTART;VALUE=DATE:20270121');
+    expect(ics).toContain('SUMMARY:IPVA\\, do carro');
+    expect(ics).toContain('TRIGGER:-P2D');
+  });
+
+  it('baixa o arquivo da agenda', async () => {
+    const criar = vi.fn(() => 'blob:x');
+    const revogar = vi.fn();
+    vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: criar, revokeObjectURL: revogar }));
+    const clique = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    const user = userEvent.setup();
+    render(<Agenda />);
+
+    await user.click(await screen.findByRole('button', { name: 'Levar para minha agenda' }));
+
+    expect(criar).toHaveBeenCalled();
+    expect(clique).toHaveBeenCalled();
+    expect(revogar).toHaveBeenCalledWith('blob:x');
+  });
+});
+
+describe('MEI', () => {
+  const painel = {
+    ativo: true,
+    faturamento: { totalCents: 5_800_000 },
+    limite: { usadoPct: 71.6, limiteCents: 8_100_000, mediaMensalDisponivelCents: 1_150_000, nivel: 'atencao', mensagem: 'Você já usou mais de 70% do limite do ano.' },
+    das: { totalCents: 8_605 },
+  };
+  beforeEach(() => {
+    falso.meiPainel.mockResolvedValue(painel);
+    falso.meiNotas.mockResolvedValue({ notas: [{ id: 'n1', numero: 1, tomadorNome: 'Cliente A', descricao: 'Site', valorCents: 3_200_000, emitidaEm: '2026-04-10', status: 'emitida', ambiente: 'teste' }] });
+  });
+
+  it('mostra uso do limite e alerta', async () => {
+    render(<Mei />);
+
+    expect(await screen.findByRole('meter', { name: 'Uso do limite' })).toHaveAttribute('aria-valuenow', '71.6');
+    expect(screen.getByText(/mais de 70%/)).toBeInTheDocument();
+  });
+
+  it('emite nota e cancela outra', async () => {
+    falso.emitirNota.mockResolvedValue({ nota: { numero: 2, ambiente: 'teste' } });
+    falso.cancelarNota.mockResolvedValue({});
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const user = userEvent.setup();
+    render(<Mei />);
+    await screen.findByText(/Cliente A/);
+
+    const form = screen.getByRole('form', { name: 'Emitir nota' });
+    await user.type(within(form).getByLabelText('Cliente'), 'Cliente B');
+    await user.type(within(form).getByLabelText('Serviço prestado'), 'Manutenção');
+    await user.type(within(form).getByLabelText('Valor (R$)'), '2.600');
+    await user.click(within(form).getByRole('button', { name: 'Emitir nota' }));
+    expect(falso.emitirNota).toHaveBeenCalledWith({ tomadorNome: 'Cliente B', tomadorDoc: undefined, descricao: 'Manutenção', valorCents: 260_000 });
+    expect(await screen.findByText(/Nota nº 2 emitida \(ambiente de teste\)/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }));
+    expect(falso.cancelarNota).toHaveBeenCalledWith('n1');
+  });
+
+  it('quem não é MEI vê o atalho para o perfil e o comparador lê "90.000" como noventa mil', async () => {
+    falso.meiPainel.mockResolvedValue({ ...painel, ativo: false });
+    falso.comparar.mockResolvedValue({
+      observacao: '',
+      opcoes: [
+        { regime: 'simples_anexo_iii', nome: 'Simples III', permitido: true, impostoAnualCents: 900_000, inssAnualCents: 0, cargaPct: 10, detalhes: 'DAS 6%' },
+        { regime: 'mei', nome: 'MEI', permitido: false, motivo: 'Acima de 81 mil', impostoAnualCents: 0, inssAnualCents: 0, cargaPct: 0, detalhes: '' },
+      ],
+    });
+    const irParaPerfil = vi.fn();
+    const user = userEvent.setup();
+    render(<Mei irParaPerfil={irParaPerfil} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Abrir perfil' }));
+    expect(irParaPerfil).toHaveBeenCalled();
+
+    await user.type(screen.getByLabelText('Faturamento por ano (R$)'), '90.000');
+    await user.click(screen.getByRole('button', { name: 'Comparar' }));
+    expect(falso.comparar).toHaveBeenCalledWith(9_000_000, 'servicos');
+    expect(await screen.findByText('mais barato')).toBeInTheDocument();
+    expect(screen.getByText('Acima de 81 mil')).toBeInTheDocument();
+  });
+});
+
+describe('Ajuda', () => {
+  beforeEach(() => {
+    falso.perfil.mockResolvedValue({ perfil: umPerfil({ preenchido: false }) });
+    falso.contadores.mockResolvedValue({ contadores: [{ id: 'a1', nome: 'Escritório Exemplo', crc: 'x', uf: 'SP', cidade: 'São Paulo', especialidades: ['malha_fina'], precoConsultaCents: 15_000, atendeOnline: true, exemplo: true }] });
+  });
+
+  it('assistente responde com fontes a partir de uma sugestão', async () => {
+    falso.perguntar.mockResolvedValue({ resposta: 'O limite é R$ 81 mil.', fontes: [{ id: 'guia-mei', fonte: 'LC 123/2006', titulo: 'MEI' }], modo: 'busca', aviso: '' });
+    const user = userEvent.setup();
+    render(<Ajuda />);
+
+    await user.click(screen.getByRole('button', { name: 'Quanto o MEI pode faturar?' }));
+
+    expect(await screen.findByText('O limite é R$ 81 mil.')).toBeInTheDocument();
+    expect(screen.getByText('Fontes: LC 123/2006')).toBeInTheDocument();
+  });
+
+  it('pergunta digitada curta demais não é enviada', async () => {
+    const user = userEvent.setup();
+    render(<Ajuda />);
+
+    await user.type(screen.getByLabelText('Sua pergunta'), 'oi');
+    await user.click(screen.getByRole('button', { name: 'Perguntar' }));
+
+    expect(falso.perguntar).not.toHaveBeenCalled();
+  });
+
+  it('salva o perfil com valores em centavos e mostra campos do MEI', async () => {
+    falso.salvarPerfil.mockImplementation(async (p) => ({ perfil: umPerfil(p) }));
+    const user = userEvent.setup();
+    render(<Ajuda />);
+
+    expect(await screen.findByText(/Preencha para personalizar/)).toBeInTheDocument();
+    await user.clear(screen.getByLabelText('Renda bruta por mês (R$)'));
+    await user.type(screen.getByLabelText('Renda bruta por mês (R$)'), '6.500');
+    await user.click(screen.getByLabelText('Sou MEI'));
+    await user.selectOptions(screen.getByLabelText('Atividade do MEI'), 'comercio');
+    await user.click(screen.getByLabelText(/CadÚnico/));
+    await user.click(screen.getByRole('button', { name: 'Salvar perfil' }));
+
+    expect(falso.salvarPerfil).toHaveBeenCalledWith(expect.objectContaining({ rendaMensalCents: 650_000, mei: true, meiAtividade: 'comercio', cadunico: true }));
+    expect(falso.salvarPerfil.mock.calls[0]![0]).not.toHaveProperty('preenchido');
+    expect(await screen.findByText('Perfil salvo.')).toBeInTheDocument();
+  });
+
+  it('pede contato a um contador (cadastro de exemplo sinalizado)', async () => {
+    falso.contatar.mockResolvedValue({});
+    const user = userEvent.setup();
+    render(<Ajuda />);
+
+    expect(await screen.findByText('Exemplo')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Contatar' }));
+    await user.type(screen.getByLabelText(/Mensagem para/), 'Caí na malha fina, preciso de ajuda.');
+    await user.click(screen.getByRole('button', { name: 'Enviar pedido' }));
+
+    expect(falso.contatar).toHaveBeenCalledWith('a1', 'outro', 'Caí na malha fina, preciso de ajuda.');
+    expect(await screen.findByText(/Pedido enviado/)).toBeInTheDocument();
+  });
+});
+
+describe('Impostômetro anual', () => {
+  it('traduz o total em dias de trabalho', async () => {
+    falso.impostometroAnual.mockResolvedValue({ ano: 2026, totalCents: 1_169_358, partes: [{ chave: 'ir', rotulo: 'Imposto de Renda', cents: 420_000 }], pctDaRenda: 17.5, diasTrabalhados: 64, liberdadeEm: '2026-03-06', estimado: true });
+    render(<AnualCard />);
+
+    expect(await screen.findByText('64 dias')).toBeInTheDocument();
+    expect(screen.getByText(/até 06\/03/)).toBeInTheDocument();
+    expect(screen.getByText(/estimados pela renda/)).toBeInTheDocument();
+  });
+
+  it('sem impostos no ano não mostra nada', async () => {
+    falso.impostometroAnual.mockResolvedValue({ ano: 2026, totalCents: 0, partes: [], pctDaRenda: null, diasTrabalhados: null, liberdadeEm: null, estimado: false });
+    const { container } = render(<AnualCard />);
+
+    await waitFor(() => expect(falso.impostometroAnual).toHaveBeenCalled());
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('erro de rede aparece com opção de tentar de novo', async () => {
+    falso.notas.mockRejectedValueOnce(new Error('offline')).mockResolvedValue({ notas: [], resumo: { total: 0, semCpf: 0 } });
+    falso.cashback.mockResolvedValue(cashbackPadrao);
+    const user = userEvent.setup();
+    render(<Notas />);
+
+    await user.click(await screen.findByRole('button', { name: 'Tentar de novo' }));
+
+    expect(await screen.findByText('Nenhuma nota ainda.')).toBeInTheDocument();
+  });
+});

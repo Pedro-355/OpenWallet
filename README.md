@@ -1,1 +1,200 @@
 # OpenWallet
+
+App para o brasileiro enxergar, recuperar e organizar os impostos que paga: impostômetro, leitor de nota fiscal (NFC-e), cashback da reforma tributária, simulador e prévia do IR com checagem de malha fina, agenda fiscal (DAS, carnê-leão, IPVA, IPTU), painel do MEI com emissão de NFS-e, assistente tributário e contadores.
+
+📄 **Escopo, regras e roadmap do MVP: [docs/MVP.md](docs/MVP.md)**
+
+## Impostômetro
+
+Mostra, para cada gasto, quanto do valor pago foi imposto: federal, estadual (ICMS, conforme a UF) e municipal (ISS).
+Os percentuais seguem a lógica da tabela IBPT usada nas notas fiscais (Lei 12.741/2012).
+
+![Tela do impostômetro](docs/impostometro.png)
+
+> ⚠️ A tabela que vem no repositório é **ilustrativa**. Antes de produção, importe as tabelas oficiais (veja [Alíquotas](#alíquotas-ibpt)).
+
+## Estrutura
+
+```
+packages/tax   cálculo puro (roda no servidor e no navegador) + tabela de alíquotas
+apps/api       API REST — Fastify, PostgreSQL, Redis
+apps/web       tela do impostômetro — React + Vite
+apps/openfinance-mock   Banco Sandbox: Open Finance simulado que envia webhooks de compras
+scripts/       importador das tabelas IBPT
+```
+
+## Instalar no celular (só para você, sem publicar)
+
+O app roda no **seu computador** e o celular acessa por uma rede privada sua, o [Tailscale](https://tailscale.com) (grátis para uso pessoal). Ninguém mais consegue abrir — nem quem está no mesmo Wi-Fi. O endereço tem HTTPS válido, então o Android instala como app de verdade (PWA): ícone na tela inicial, tela cheia, abre até sem internet.
+
+**Uma vez só, no computador:**
+1. Instale o [Docker Desktop](https://www.docker.com/products/docker-desktop) e abra.
+2. Instale o [Tailscale](https://tailscale.com/download) e entre (com Google, por exemplo).
+3. Baixe este repositório (branch `CLAUDE/impostometro`) e, na pasta dele, rode:
+   - **Windows (PowerShell):** `powershell -ExecutionPolicy Bypass -File scripts\celular.ps1`
+   - **Mac/Linux:** `./scripts/celular.sh`
+
+   Na primeira vez o Tailscale pode mostrar um link para liberar o HTTPS: abra, aprove e o script continua. No fim ele mostra o endereço, tipo `https://meu-pc.tail1234.ts.net`.
+
+**No celular Android:**
+1. Instale o app **Tailscale** (Play Store) e entre com a **mesma conta**.
+2. Abra o endereço no **Chrome** e toque em **Instalar** (ou menu ⋮ → *Instalar app*).
+
+O app funciona sempre que o computador estiver ligado (o Docker religa tudo sozinho quando o PC liga). Seus gastos ficam guardados no computador, mesmo desligando. Para parar: `scripts\celular.ps1 parar` ou `./scripts/celular.sh parar`.
+
+> O Banco Sandbox guarda as conexões em memória: se o computador reiniciar, a conta aparece "Com erro" e é só tocar em **Conectar banco** de novo. Os gastos já importados continuam.
+
+<details><summary>Publicar na internet (opcional, para depois)</summary>
+
+O `render.yaml` sobe tudo no [Render](https://render.com) de graça: **New → Blueprint** → este repositório. Plano free: dorme após ~15 min sem uso e o Postgres expira em 30 dias. Para a Play Store, o mesmo PWA vira pacote com o [PWABuilder](https://www.pwabuilder.com).
+</details>
+
+## Rodando
+
+**Com Docker (tudo junto: 2 réplicas da API, 2 workers, banco simulado):**
+
+```bash
+JWT_SECRET=$(openssl rand -hex 32) docker compose up --build
+# app:            http://localhost:8080
+# Banco Sandbox:  http://localhost:4000 (consentimentos e webhooks enviados)
+```
+
+**Desenvolvimento:**
+
+```bash
+npm install
+cp apps/api/.env.example apps/api/.env   # ajuste DATABASE_URL / REDIS_URL
+npm run build -w @openwallet/tax
+npm run dev:api     # http://localhost:3000
+npm run dev:worker  # processa webhooks e sincronizações
+npm run dev:bank    # Banco Sandbox em http://localhost:4000
+npm run dev:web     # http://localhost:5173 (encaminha /api para a API)
+```
+
+Para ligar o Open Finance no `.env` da API: `OPENFINANCE_BASE_URL=http://localhost:4000`, `OPENFINANCE_API_KEY=sandbox-key`, `OPENFINANCE_WEBHOOK_SECRET=sandbox-webhook-secret`.
+
+**Testes** — guia completo em [TESTING.md](TESTING.md):
+
+```bash
+npm run test:unit          # unitários: sem banco nem rede, em segundos
+npm run test:coverage      # unitários + relatório de cobertura
+npm run test:integration   # integração: precisa de Postgres em localhost:5433 e Redis em :6380
+```
+
+## Como o imposto é calculado
+
+O imposto brasileiro é "por dentro": ele já está contido no preço. Então:
+
+```
+imposto = valor pago × (federal% + estadual%[UF] + municipal%) / 100
+```
+
+- Tudo em **centavos inteiros**. Cada parcela é arredondada e o total é a soma delas, então os números sempre batem.
+- Cada gasto guarda uma **foto** do imposto e da versão da tabela usada (`rates_version`). Se a tabela mudar depois, o histórico não muda.
+- A UF vem do perfil, mas pode ser trocada em cada gasto (compra feita em viagem).
+
+## Open Finance
+
+```
+ App ──1. Conectar banco──▶ API ──cria consentimento──▶ Banco/agregador
+  ◀──2. redireciona para a tela de consentimento do banco──┘
+ usuário autoriza ──3. banco devolve para /openfinance/callback──▶ API confere state + status
+                                                                   └─▶ agenda carga do histórico (90 dias)
+ Banco ──4. webhook "transactions.created" (assinado HMAC)──▶ API: valida, deduplica, enfileira → 202
+                                                    Worker ◀── fila no Postgres (SKIP LOCKED)
+                                                      └─▶ busca transações paginadas → só compras →
+                                                          categoria pelo MCC → imposto → INSERT em lote
+```
+
+- **Só compras viram gastos:** débitos do tipo compra. Pagamento de fatura, crédito e cashback são ignorados. Estorno apaga a compra original.
+- **Categoria pelo MCC** do estabelecimento (`packages/tax/src/mcc.ts`). O usuário pode corrigir no app.
+- **UF:** o Open Finance não informa o estado do estabelecimento, então usamos o do perfil.
+- **Nada duplica:** o evento é deduplicado pelo `eventId` e o gasto pelo `transactionId` do banco. Gasto importado que o usuário apaga não volta (fica uma "lápide").
+- **O webhook só valida e enfileira**, respondendo em milissegundos. Assinatura `x-ow-signature: t=<unix>,v1=<hmac-sha256>`, recusada se tiver mais de 5 min (contra repetição).
+- **Worker separado e escalável:** acorda na hora por `LISTEN/NOTIFY`, tenta de novo com espera exponencial, marca como `dead` depois de 8 falhas e devolve à fila trabalhos de workers que morreram.
+
+**Banco Sandbox (`apps/openfinance-mock`):** segue o formato do Open Finance Brasil (consentimento v3, cartões v2 com `payeeMCC`), tem tela de autorização e gera compras fictícias a cada `SIMULATE_INTERVAL_MS`. Também dá para forçar eventos:
+
+```bash
+curl -X POST localhost:4000/sandbox/purchase -H 'content-type: application/json' \
+  -d '{"consentId":"urn:sandbox:...","amountCents":15000,"mcc":5541,"name":"POSTO TESTE"}'
+curl -X POST localhost:4000/sandbox/reversal -H 'content-type: application/json' \
+  -d '{"consentId":"urn:sandbox:...","transactionId":"..."}'
+```
+
+> O Open Finance Brasil oficial não envia webhooks de transação para quem recebe os dados; isso é feito por agregadores (Pluggy, Belvo...). O sandbox se comporta como um agregador. Para produção, implemente a interface `OpenFinanceProvider` (`apps/api/src/lib/openfinance-client.ts`) com o agregador escolhido e registre em `provider-factory.ts`. O restante (fila, worker, imposto) não muda.
+
+## Alíquotas (IBPT)
+
+1. Baixe as tabelas por UF no portal [De Olho no Imposto](https://deolhonoimposto.ibpt.org.br) (arquivos `TabelaIBPTaxSP26.2.A.csv` etc.) e coloque numa pasta, ex. `ibpt-raw/`.
+2. Revise o mapeamento categoria → códigos NCM/LC 116 em `packages/tax/data/categories.json`.
+3. Rode:
+
+```bash
+npm run import:ibpt -- ibpt-raw/
+```
+
+O script tira a média das alíquotas dos códigos de cada categoria, por estado, e grava `packages/tax/data/rates.json`.
+A tabela do IBPT costuma ser atualizada a cada seis meses: repita o processo e faça o deploy.
+
+## API
+
+| Método | Rota | O que faz |
+|---|---|---|
+| POST | `/v1/auth/register` · `/login` · `/refresh` · `/logout` | Conta e sessão (access token de 15 min + refresh token rotativo) |
+| GET/PATCH | `/v1/me` | Perfil (UF) |
+| POST | `/v1/expenses` | Cria gasto já com imposto calculado. Aceita `Idempotency-Key` |
+| GET | `/v1/expenses?limit&cursor&from&to&category` | Lista paginada por cursor |
+| GET/PATCH/DELETE | `/v1/expenses/:id` | Detalhe, edição (recalcula imposto), exclusão |
+| GET | `/v1/impostometro/summary?month=AAAA-MM` | Total do mês, por esfera e por categoria, e acumulado do ano |
+| GET | `/v1/impostometro/history?months=12` | Imposto mês a mês |
+| GET | `/v1/tax/rates` · `/categories` · `/estimate` | Tabela (com ETag), categorias e simulação |
+| GET/POST | `/v1/openfinance/connections` | Lista conexões / inicia consentimento (devolve `authorizeUrl`) |
+| POST | `/v1/openfinance/connections/callback` | Finaliza após o retorno do banco |
+| POST/DELETE | `/v1/openfinance/connections/:id/sync` · `/:id` | Sincroniza agora / desconecta |
+| POST | `/v1/webhooks/openfinance` | Webhook do provedor (assinado) |
+| GET | `/health/live` · `/health/ready` | Liveness e readiness |
+
+## Decisões para escalar e ficar estável
+
+**API sem estado.** Nada fica na memória do processo: dá para rodar N réplicas atrás de um balanceador (o compose já sobe 2).
+
+**Banco**
+- `expenses` é **particionada por hash do usuário** (16 partições). Toda consulta filtra por `user_id`, então cada uma toca uma só partição, e os índices continuam pequenos com milhões de linhas.
+- Índice `(user_id, spent_on DESC, id DESC)` atende a lista e o resumo.
+- **Paginação por cursor** (keyset), não `OFFSET`: a página 1000 custa o mesmo que a primeira.
+- `statement_timeout` e `idle_in_transaction_session_timeout` impedem que uma consulta travada segure conexões.
+- Migrações com **advisory lock**: várias réplicas podem subir juntas sem conflito.
+- Restrições no próprio banco (valor > 0, imposto = soma das parcelas, imposto ≤ valor).
+
+**Redis (opcional e tolerante a falha)**
+- Cache do resumo e do histórico, invalidado por versão a cada gravação do usuário.
+- Rate limit compartilhado entre réplicas (300 req/min por usuário; 10/min nas rotas de login).
+- Se o Redis cair, a API continua respondendo sem cache (testado), e o readiness mostra `degraded` sem tirar a réplica do ar.
+
+**Robustez**
+- `Idempotency-Key` no POST: reenvio por rede ruim ou clique duplo não duplica gasto (testado com requisições simultâneas).
+- Refresh token **rotativo** com detecção de reuso: se um token antigo for usado de novo, todas as sessões do usuário caem.
+- Senhas com scrypt; login com tempo constante mesmo para e-mail inexistente.
+- Desligamento gracioso (SIGTERM): o readiness passa a falhar, as requisições em andamento terminam e só então banco e Redis fecham. Deploys sem 502.
+- Validação de toda entrada com zod; limite de 16 KB por requisição; `x-request-id` em todos os logs e respostas.
+- Logs estruturados em JSON, com o token removido.
+
+**Cliente**
+- A prévia do imposto no formulário é calculada no aparelho, com o mesmo pacote do servidor: resposta instantânea e zero carga extra.
+- A tabela de alíquotas é servida com ETag e cache de 1 h.
+
+**Números de referência** (1 instância, 1 vCPU, usuário com 20 mil gastos, 50 conexões simultâneas):
+
+| Rota | Req/s | Latência p50 / p99 |
+|---|---|---|
+| `GET /impostometro/summary` (com cache) | ~5.100 | 7 ms / 38 ms |
+| `GET /expenses?limit=30` | ~1.900 | 23 ms / 56 ms |
+| `GET /tax/estimate` | ~11.500 | 3 ms / 12 ms |
+
+### Próximos passos quando o volume crescer
+- **PgBouncer** (modo transaction) na frente do Postgres quando o número de réplicas × `DB_POOL_MAX` passar de ~200 conexões.
+- **Réplica de leitura** para resumo e histórico (aceitando alguns segundos de atraso).
+- **Tabela de resumo mensal** (`user_id, month, category`) atualizada a cada gravação, se o resumo passar a pesar.
+- **Métricas** (Prometheus/OpenTelemetry) e alertas de p99 e taxa de erro.
+- Autoscaling horizontal da API pela CPU; a API já está pronta para isso.

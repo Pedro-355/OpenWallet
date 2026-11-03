@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#0f1720"/>
+  <g transform="translate(256 262)">
+    <!-- carteira -->
+    <rect x="-150" y="-104" width="300" height="208" rx="38" fill="#17212c" stroke="#f5b942" stroke-width="18"/>
+    <path d="M-150 -56 H120 a30 30 0 0 1 30 30" fill="none" stroke="#f5b942" stroke-width="18" stroke-linecap="round"/>
+    <!-- % do imposto -->
+    <circle cx="-48" cy="-6" r="24" fill="none" stroke="#f5b942" stroke-width="16"/>
+    <circle cx="44" cy="64" r="24" fill="none" stroke="#f5b942" stroke-width="16"/>
+    <path d="M58 -24 L-62 94" stroke="#f5b942" stroke-width="18" stroke-linecap="round"/>
+  </g>
+</svg>

@@ -1,0 +1,82 @@
+{
+  "version": "ilustrativo-1",
+  "source": "Valores ilustrativos — rode a importação do IBPT antes de usar em produção",
+  "illustrative": true,
+  "fallbackCategory": "outros",
+  "categories": {
+    "mercado": {
+      "label": "Mercado",
+      "federal": 8,
+      "estadual": {},
+      "estadualPadrao": 10
+    },
+    "restaurante": {
+      "label": "Restaurante e lanches",
+      "federal": 13,
+      "estadual": {},
+      "estadualPadrao": 12
+    },
+    "bebidas": {
+      "label": "Bebidas",
+      "federal": 25,
+      "estadual": {},
+      "estadualPadrao": 20
+    },
+    "combustivel": {
+      "label": "Combustível",
+      "federal": 15,
+      "estadual": {},
+      "estadualPadrao": 25
+    },
+    "transporte": {
+      "label": "Transporte e apps",
+      "federal": 10,
+      "municipal": 5,
+      "estadual": {},
+      "estadualPadrao": 0
+    },
+    "moradia": {
+      "label": "Contas da casa (luz, gás)",
+      "federal": 9,
+      "estadual": {},
+      "estadualPadrao": 20
+    },
+    "eletronicos": {
+      "label": "Eletrônicos",
+      "federal": 20,
+      "estadual": {},
+      "estadualPadrao": 18
+    },
+    "vestuario": {
+      "label": "Roupas e calçados",
+      "federal": 15,
+      "estadual": {},
+      "estadualPadrao": 18
+    },
+    "saude": {
+      "label": "Farmácia e saúde",
+      "federal": 12,
+      "estadual": {},
+      "estadualPadrao": 15
+    },
+    "beleza": {
+      "label": "Higiene e beleza",
+      "federal": 20,
+      "estadual": {},
+      "estadualPadrao": 18
+    },
+    "servicos": {
+      "label": "Serviços",
+      "federal": 13,
+      "municipal": 5,
+      "estadual": {},
+      "estadualPadrao": 0
+    },
+    "outros": {
+      "label": "Outros",
+      "federal": 13,
+      "estadual": {},
+      "estadualPadrao": 17
+    }
+  }
+}
