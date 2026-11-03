@@ -3,6 +3,12 @@ import { createRoot } from 'react-dom/client';
 import { api, auth, ApiError } from './api';
 import { AuthScreen } from './AuthScreen';
 import { Impostometro } from './Impostometro';
+import { Navegacao, type Aba } from './telas/Navegacao';
+import { Notas } from './telas/Notas';
+import { Ir } from './telas/Ir';
+import { Agenda } from './telas/Agenda';
+import { Mei } from './telas/Mei';
+import { Ajuda } from './telas/Ajuda';
 import { setupPwa } from './install';
 import './styles.css';
 
@@ -46,6 +52,12 @@ function App() {
   const user = useSyncExternalStore(auth.subscribe, () => auth.user);
   const [path, setPath] = useState(window.location.pathname);
   const [flash, setFlash] = useState('');
+  const [aba, setAba] = useState<Aba>(() => (window.location.hash.slice(1) as Aba) || 'inicio');
+  const irPara = (a: Aba) => {
+    setAba(a);
+    window.history.replaceState(null, '', a === 'inicio' ? window.location.pathname : `#${a}`);
+    window.scrollTo(0, 0);
+  };
   if (!user) return <AuthScreen />;
   if (path === CALLBACK_PATH) {
     return (
@@ -57,7 +69,17 @@ function App() {
       />
     );
   }
-  return <Impostometro user={user} flash={flash} onFlashSeen={() => setFlash('')} />;
+  return (
+    <>
+      {aba === 'inicio' && <Impostometro user={user} flash={flash} onFlashSeen={() => setFlash('')} />}
+      {aba === 'notas' && <Notas />}
+      {aba === 'ir' && <Ir />}
+      {aba === 'agenda' && <Agenda />}
+      {aba === 'mei' && <Mei irParaPerfil={() => irPara('ajuda')} />}
+      {aba === 'ajuda' && <Ajuda />}
+      <Navegacao atual={aba} onTrocar={irPara} />
+    </>
+  );
 }
 
 createRoot(document.getElementById('root')!).render(

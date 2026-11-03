@@ -44,7 +44,7 @@ export interface ExpenseRow {
   tax_total_cents: number;
   tax_rate_pct: number;
   rates_version: string;
-  source: 'manual' | 'openfinance';
+  source: 'manual' | 'openfinance' | 'nfce';
   mcc: number | null;
   created_at: Date;
 }

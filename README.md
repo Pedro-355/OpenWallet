@@ -1,4 +1,10 @@
-# OpenWallet — Impostômetro
+# OpenWallet
+
+App para o brasileiro enxergar, recuperar e organizar os impostos que paga: impostômetro, leitor de nota fiscal (NFC-e), cashback da reforma tributária, simulador e prévia do IR com checagem de malha fina, agenda fiscal (DAS, carnê-leão, IPVA, IPTU), painel do MEI com emissão de NFS-e, assistente tributário e contadores.
+
+📄 **Escopo, regras e roadmap do MVP: [docs/MVP.md](docs/MVP.md)**
+
+## Impostômetro
 
 Mostra, para cada gasto, quanto do valor pago foi imposto: federal, estadual (ICMS, conforme a UF) e municipal (ISS).
 Os percentuais seguem a lógica da tabela IBPT usada nas notas fiscais (Lei 12.741/2012).

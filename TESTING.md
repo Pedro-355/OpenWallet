@@ -10,7 +10,7 @@
 
 | Projeto | O que cobre | Onde ficam os testes | Precisa de |
 |---|---|---|---|
-| `unit:tax` | cálculo do imposto, tabela de alíquotas, MCC | `packages/tax/src/*.test.ts` | nada |
+| `unit:tax` | cálculo do imposto, tabela de alíquotas, MCC, IR/INSS, MEI/Simples, NFC-e, cashback, agenda, malha fina | `packages/tax/src/*.test.ts` | nada |
 | `unit:api` | regras puras, config, senha, assinatura de webhook, cache, cliente HTTP do banco | `apps/api/src/**/*.test.ts` | nada |
 | `unit:bank` | Banco Sandbox (consentimento, transações, webhooks) | `apps/openfinance-mock/src/*.test.ts` | nada |
 | `unit:web` | formatação, cliente da API, formulário, login, instalação | `apps/web/src/**/*.test.{ts,tsx}` | nada (jsdom) |

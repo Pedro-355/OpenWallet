@@ -80,6 +80,7 @@ export default defineConfig({
         'apps/api/src/config.ts',
         'apps/api/src/lib/**/*.ts',
         'apps/api/src/services/openfinance-rules.ts',
+        'apps/api/src/services/assistente-rules.ts',
         'apps/openfinance-mock/src/**/*.ts',
         'apps/web/src/**/*.{ts,tsx}',
       ],

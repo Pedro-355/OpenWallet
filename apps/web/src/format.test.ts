@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { brl, capitalize, dayLabel, lastDay, monthLong, monthShort, parseMoney, pct, shiftMonth, todayISO } from './format';
+import { brl, capitalize, dayLabel, lastDay, monthLong, monthShort, parseMoney, parseReais, pct, shiftMonth, todayISO } from './format';
 
 const nbsp = (s: string) => s.replace(/\s/g, ' ');
 
@@ -64,5 +64,19 @@ describe('formatação', () => {
     expect(nbsp(brl(0))).toBe('R$ 0,00');
     expect(pct(31.45)).toBe('31,5%');
     expect(pct(18)).toBe('18%');
+  });
+});
+
+describe('parseReais', () => {
+  it.each([
+    ['90.000', 9_000_000],
+    ['1.234.567', 123_456_700],
+    ['R$ 2.600', 260_000],
+    ['12,34', 1_234],
+    ['12.34', 1_234],
+    ['1.234,56', 123_456],
+    ['', null],
+  ])('"%s" → %s', (entrada, esperado) => {
+    expect(parseReais(entrada)).toBe(esperado);
   });
 });

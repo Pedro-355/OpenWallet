@@ -170,3 +170,5 @@ export function formatBRL(cents: number): string {
 }
 
 export { categoryFromMcc } from './mcc.js';
+
+export * from './fiscal/index.js';

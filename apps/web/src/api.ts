@@ -11,7 +11,7 @@ export interface Expense {
   description: string;
   uf: string;
   spentOn: string;
-  source: 'manual' | 'openfinance';
+  source: 'manual' | 'openfinance' | 'nfce';
   tax: { federalCents: number; estadualCents: number; municipalCents: number; totalCents: number; ratePct: number; ratesVersion: string };
 }
 export interface Summary {
@@ -118,7 +118,7 @@ function refresh(): Promise<boolean> {
   return refreshing;
 }
 
-async function call<T>(method: string, path: string, body?: unknown, extra: Record<string, string> = {}): Promise<T> {
+export async function call<T>(method: string, path: string, body?: unknown, extra: Record<string, string> = {}): Promise<T> {
   const attempt = () => raw<T>(method, path, body, { ...extra, authorization: `Bearer ${session?.accessToken ?? ''}` });
   try {
     return await attempt();

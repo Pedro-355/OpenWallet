@@ -3,6 +3,7 @@ import { UFS, type TaxRatesTable } from '@openwallet/tax';
 import { api, auth, ApiError, type Connection, type Expense, type History, type Summary, type User } from './api';
 import { InstallBanner } from './InstallBanner';
 import { ExpenseForm } from './ExpenseForm';
+import { AnualCard } from './telas/AnualCard';
 import { brl, capitalize, dayLabel, lastDay, monthLong, monthShort, pct, shiftMonth, todayISO } from './format';
 
 export function Impostometro({ user, flash, onFlashSeen }: { user: User; flash?: string; onFlashSeen?: () => void }) {
@@ -143,6 +144,8 @@ export function Impostometro({ user, flash, onFlashSeen }: { user: User; flash?:
         {summary && summary.totals.taxCents > 0 && <SphereBar s={summary} />}
         <p className="muted small">No ano até aqui: {brl(summary?.yearToDate.taxCents ?? 0)} em impostos</p>
       </section>
+
+      <AnualCard versao={summary?.yearToDate.taxCents ?? 0} />
 
       <div className="grid">
         <section className="card">
