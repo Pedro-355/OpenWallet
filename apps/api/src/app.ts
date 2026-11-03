@@ -17,6 +17,16 @@ import { impostometroRoutes } from './routes/impostometro.js';
 import { healthRoutes } from './routes/health.js';
 import { taxRoutes } from './routes/tax.js';
 import { openFinanceRoutes } from './routes/openfinance.js';
+import { perfilRoutes } from './routes/perfil.js';
+import { notasRoutes } from './routes/notas.js';
+import { irRoutes } from './routes/ir.js';
+import { agendaRoutes } from './routes/agenda.js';
+import { meiRoutes } from './routes/mei.js';
+import { carregarCorpus, extrasRoutes } from './routes/extras.js';
+import {
+  sandboxNfse, sandboxNotaFiscal, sandboxPendencias,
+  type NfseProvider, type NotaFiscalProvider, type PendenciasProvider,
+} from './lib/gov-providers.js';
 import type { OpenFinanceProvider } from './lib/openfinance-client.js';
 import { createOpenFinanceService, type OpenFinanceService } from './services/openfinance.js';
 import fastifyStatic from '@fastify/static';
@@ -31,6 +41,10 @@ export interface AppDeps {
   rates: TaxRatesTable;
   /** Provedor Open Finance; null desliga a integração. */
   provider?: OpenFinanceProvider | null;
+  /** Integrações com o governo (padrão: sandbox). Testes podem injetar outras. */
+  gov?: { notas?: NotaFiscalProvider; nfse?: NfseProvider; pendencias?: PendenciasProvider };
+  /** fetch usado pelo assistente (testes injetam um falso). */
+  fetchFn?: typeof fetch;
 }
 
 declare module 'fastify' {
@@ -181,6 +195,28 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(expenseRoutes, { prefix: '/v1' });
   await app.register(impostometroRoutes, { prefix: '/v1' });
   await app.register(openFinanceRoutes, { prefix: '/v1', service: ofService });
+
+  // MVP: perfil fiscal, notas (NFC-e), IR, agenda, MEI, cashback, assistente e contadores.
+  const gov = deps.gov ?? {};
+  await app.register(perfilRoutes, { prefix: '/v1' });
+  await app.register(notasRoutes, { prefix: '/v1', provider: gov.notas ?? sandboxNotaFiscal() });
+  await app.register(irRoutes, { prefix: '/v1' });
+  await app.register(agendaRoutes, { prefix: '/v1' });
+  await app.register(meiRoutes, { prefix: '/v1', nfse: gov.nfse ?? sandboxNfse() });
+  await app.register(extrasRoutes, {
+    prefix: '/v1',
+    pendencias: gov.pendencias ?? sandboxPendencias(),
+    corpus: carregarCorpus(),
+    llm: config.ASSISTENTE_API_KEY
+      ? {
+          apiKey: config.ASSISTENTE_API_KEY,
+          model: config.ASSISTENTE_MODEL,
+          baseUrl: config.ASSISTENTE_BASE_URL,
+          timeoutMs: config.ASSISTENTE_TIMEOUT_MS,
+          fetchFn: deps.fetchFn,
+        }
+      : null,
+  });
 
   // Banco Sandbox embutido (demo/deploy gratuito). Em produção, aponte para um provedor real.
   if (config.SANDBOX_BANK) {

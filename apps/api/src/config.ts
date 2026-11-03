@@ -53,6 +53,21 @@ const schema = z.object({
   SANDBOX_SIMULATE_INTERVAL_MS: z.coerce.number().int().min(0).default(45_000),
   /** Pasta com o build da tela web para servir no mesmo endereço (ex.: apps/web/dist). */
   SERVE_WEB_DIR: z.string().optional(),
+
+  // ---- MVP: integrações com o governo e assistente ----
+  /** Consulta de NFC-e na SEFAZ. Hoje só 'sandbox'; produção: implemente NotaFiscalProvider. */
+  NOTAS_PROVIDER: z.enum(['sandbox']).default('sandbox'),
+  /** Emissão de NFS-e do MEI. Hoje só 'sandbox'; produção: Emissor Nacional (ADN). */
+  NFSE_PROVIDER: z.enum(['sandbox']).default('sandbox'),
+  /** Dívida ativa/pendências. Hoje só 'sandbox'. */
+  PENDENCIAS_PROVIDER: z.enum(['sandbox']).default('sandbox'),
+  /** Chave da API da Anthropic. Sem ela, o assistente responde só com a busca nos trechos. */
+  ASSISTENTE_API_KEY: z.string().optional(),
+  ASSISTENTE_MODEL: z.string().default('claude-haiku-5-5'),
+  ASSISTENTE_BASE_URL: z.string().url().default('https://api.anthropic.com'),
+  ASSISTENTE_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
+  /** Mostra os contadores de exemplo (cadastros fictícios do ambiente de teste). */
+  MOSTRAR_EXEMPLOS: bool.optional(),
 });
 
 export type Config = z.infer<typeof schema>;
@@ -65,6 +80,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   }
   const c = parsed.data;
   c.PUBLIC_URL ??= env.RENDER_EXTERNAL_URL || `http://localhost:${c.PORT}`;
+  c.MOSTRAR_EXEMPLOS ??= c.NODE_ENV !== 'production' || c.SANDBOX_BANK;
   if (c.SANDBOX_BANK) {
     // O próprio servidor faz o papel do banco: a API fala com ele pela rede local.
     c.OPENFINANCE_PROVIDER = 'sandbox';

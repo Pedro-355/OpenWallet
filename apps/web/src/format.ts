@@ -36,3 +36,13 @@ export function parseMoney(input: string): number | null {
   if (!Number.isFinite(n) || n <= 0) return null;
   return Math.round(n * 100);
 }
+
+/**
+ * Valor digitado em reais, no jeito brasileiro: "90.000" e "1.234.567" são milhares (não decimais).
+ * Para o resto, segue parseMoney ("12,34", "12.34", "1.234,56").
+ */
+export function parseReais(input: string): number | null {
+  const t = input.trim().replace(/^R\$\s*/i, '');
+  if (/^\d{1,3}(\.\d{3})+$/.test(t)) return parseMoney(t.replace(/\./g, ''));
+  return parseMoney(t);
+}
