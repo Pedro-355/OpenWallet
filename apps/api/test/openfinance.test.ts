@@ -197,3 +197,21 @@ describe('Open Finance (com o Banco Sandbox)', () => {
     expect(sync.statusCode).toBe(404);
   });
 });
+
+describe('banco esqueceu o consentimento (ex.: sandbox reiniciou)', () => {
+  it('marca a conexão com erro em vez de ficar tentando para sempre', async () => {
+    const u = await registerUser(ctx.app);
+    const { rows } = await ctx.pool.query(
+      `INSERT INTO bank_connections (user_id, provider, consent_id, state, institution, status)
+       VALUES ($1, 'sandbox', 'urn:sandbox:nao-existe', 's', 'Banco Sandbox', 'active') RETURNING id`,
+      [u.user.id],
+    );
+    const sync = await ctx.app.inject({ method: 'POST', url: `/v1/openfinance/connections/${rows[0].id}/sync`, headers: u.auth });
+    expect(sync.statusCode).toBe(202);
+    await worker.drain();
+    const list = (await ctx.app.inject({ url: '/v1/openfinance/connections', headers: u.auth })).json();
+    expect(list.connections[0]).toMatchObject({ status: 'error', lastError: expect.stringContaining('Conecte de novo') });
+    const dead = await ctx.pool.query(`SELECT count(*)::int AS n FROM jobs WHERE status IN ('pending','dead') AND queue = 'openfinance.sync'`);
+    expect(dead.rows[0].n).toBe(0);
+  });
+});

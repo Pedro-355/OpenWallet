@@ -2,7 +2,7 @@ import { calculateTax, categoryFromMcc, type TaxRatesTable, type UF } from '@ope
 import type { Pool } from '../db/pool.js';
 import type { Cache } from '../lib/cache.js';
 import { enqueue } from '../lib/queue.js';
-import type { CardTransaction, OpenFinanceProvider } from '../lib/openfinance-client.js';
+import { ProviderError, type CardTransaction, type OpenFinanceProvider } from '../lib/openfinance-client.js';
 import type { Logger } from '../lib/worker.js';
 
 export interface OpenFinanceDeps {
@@ -112,8 +112,22 @@ export function createOpenFinanceService(deps: OpenFinanceDeps) {
     return conn;
   }
 
+  /** O banco não reconhece mais o consentimento (expirou, foi revogado lá, ou o sandbox reiniciou). */
+  const LOST_ACCESS = 'O banco não reconhece mais este acesso. Conecte de novo.';
+  const isLostAccess = (err: unknown) => err instanceof ProviderError && (err.status === 403 || err.status === 404);
+
   /** Busca as transações da janela e grava as compras como gastos (idempotente). */
   async function sync(job: SyncJob) {
+    try {
+      await syncInner(job);
+    } catch (err) {
+      if (!isLostAccess(err)) throw err; // erro passageiro: a fila tenta de novo
+      await setStatus(job.connectionId, 'error', LOST_ACCESS);
+      log.warn({ connectionId: job.connectionId }, 'acesso ao banco perdido; conexão marcada com erro');
+    }
+  }
+
+  async function syncInner(job: SyncJob) {
     const { rows } = await pool.query<ConnectionRow & { uf: UF }>(
       `SELECT c.*, u.uf FROM bank_connections c JOIN users u ON u.id = c.user_id WHERE c.id = $1`,
       [job.connectionId],

@@ -17,22 +17,31 @@ apps/openfinance-mock   Banco Sandbox: Open Finance simulado que envia webhooks 
 scripts/       importador das tabelas IBPT
 ```
 
-## Instalar no celular
+## Instalar no celular (só para você, sem publicar)
 
-O OpenWallet é um **PWA**: instala direto do navegador, com ícone na tela inicial, abre em tela cheia e funciona sem internet (os dados atualizam quando a conexão volta). Para instalar, ele precisa estar publicado num endereço `https://`.
+O app roda no **seu computador** e o celular acessa por uma rede privada sua, o [Tailscale](https://tailscale.com) (grátis para uso pessoal). Ninguém mais consegue abrir — nem quem está no mesmo Wi-Fi. O endereço tem HTTPS válido, então o Android instala como app de verdade (PWA): ícone na tela inicial, tela cheia, abre até sem internet.
 
-**1. Publicar de graça no Render (uma vez só):**
-1. Crie uma conta em [render.com](https://render.com) entrando com o GitHub.
-2. **New → Blueprint**, escolha o repositório `OpenWallet` e a branch onde está o `render.yaml`.
-3. Clique em **Apply**. O Render cria o banco, o Redis e o app (API + worker + Banco Sandbox + tela) e devolve um endereço tipo `https://openwallet-xxxx.onrender.com`.
+**Uma vez só, no computador:**
+1. Instale o [Docker Desktop](https://www.docker.com/products/docker-desktop) e abra.
+2. Instale o [Tailscale](https://tailscale.com/download) e entre (com Google, por exemplo).
+3. Baixe este repositório (branch `CLAUDE/impostometro`) e, na pasta dele, rode:
+   - **Windows (PowerShell):** `powershell -ExecutionPolicy Bypass -File scripts\celular.ps1`
+   - **Mac/Linux:** `./scripts/celular.sh`
 
-**2. Instalar:**
-- **Android (Chrome):** abra o endereço → aparece o aviso **Instalar** no app (ou menu ⋮ → *Instalar app*).
-- **iPhone (Safari):** abra o endereço → **Compartilhar** → **Adicionar à Tela de Início**.
+   Na primeira vez o Tailscale pode mostrar um link para liberar o HTTPS: abra, aprove e o script continua. No fim ele mostra o endereço, tipo `https://meu-pc.tail1234.ts.net`.
 
-> Plano gratuito: o servidor dorme após ~15 min sem uso (o primeiro acesso leva cerca de 1 min), o Banco Sandbox perde as conexões quando o servidor reinicia, e o Postgres gratuito expira em 30 dias. Para uso contínuo, troque os planos no `render.yaml`.
->
-> Para publicar nas lojas depois: o mesmo PWA vira pacote da Play Store com o [PWABuilder](https://www.pwabuilder.com) (Trusted Web Activity), sem reescrever o app.
+**No celular Android:**
+1. Instale o app **Tailscale** (Play Store) e entre com a **mesma conta**.
+2. Abra o endereço no **Chrome** e toque em **Instalar** (ou menu ⋮ → *Instalar app*).
+
+O app funciona sempre que o computador estiver ligado (o Docker religa tudo sozinho quando o PC liga). Seus gastos ficam guardados no computador, mesmo desligando. Para parar: `scripts\celular.ps1 parar` ou `./scripts/celular.sh parar`.
+
+> O Banco Sandbox guarda as conexões em memória: se o computador reiniciar, a conta aparece "Com erro" e é só tocar em **Conectar banco** de novo. Os gastos já importados continuam.
+
+<details><summary>Publicar na internet (opcional, para depois)</summary>
+
+O `render.yaml` sobe tudo no [Render](https://render.com) de graça: **New → Blueprint** → este repositório. Plano free: dorme após ~15 min sem uso e o Postgres expira em 30 dias. Para a Play Store, o mesmo PWA vira pacote com o [PWABuilder](https://www.pwabuilder.com).
+</details>
 
 ## Rodando
 

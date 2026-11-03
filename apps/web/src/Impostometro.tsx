@@ -271,6 +271,7 @@ function BankConnections({ connections, onChange }: { connections: Connection[];
                 {statusLabel[c.status]}
                 {c.lastSyncAt && ` · atualizado ${new Date(c.lastSyncAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`}
               </span>
+              {c.status === 'error' && c.lastError && <span className="error small">{c.lastError}</span>}
             </span>
             {c.status === 'active' && (
               <button className="ghost" disabled={!!busy} onClick={() => void run(c.id, async () => { await api.syncConnection(c.id); setTimeout(() => void onChange(), 2_000); })}>

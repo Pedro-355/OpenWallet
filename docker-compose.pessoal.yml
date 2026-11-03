@@ -1,0 +1,44 @@
+# Modo pessoal: roda no seu computador e só o seu celular acessa (pela sua rede privada Tailscale).
+# Não use direto: rode  scripts/celular.sh  (Mac/Linux)  ou  scripts/celular.ps1  (Windows).
+name: openwallet
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: openwallet
+      POSTGRES_PASSWORD: openwallet
+      POSTGRES_DB: openwallet
+    volumes:
+      - dados:/var/lib/postgresql/data   # seus gastos ficam aqui, mesmo desligando o PC
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openwallet"]
+      interval: 5s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru", "--save", ""]
+    restart: unless-stopped
+
+  app:
+    build: .
+    environment:
+      DATABASE_URL: postgres://openwallet:openwallet@postgres:5432/openwallet
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:?rode scripts/celular.sh para gerar o .env.pessoal}
+      PUBLIC_URL: ${PUBLIC_URL:?rode scripts/celular.sh para gerar o .env.pessoal}
+      SANDBOX_SIMULATE_INTERVAL_MS: ${SANDBOX_SIMULATE_INTERVAL_MS:-60000}
+      DB_POOL_MAX: "5"
+    # Só no próprio computador (127.0.0.1): ninguém da sua rede Wi-Fi acessa.
+    # O celular chega pelo Tailscale, que encaminha para cá com HTTPS.
+    ports:
+      - "127.0.0.1:8080:3000"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_started }
+    restart: unless-stopped   # volta sozinho quando o computador liga
+
+volumes:
+  dados:
