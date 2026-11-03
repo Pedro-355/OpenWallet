@@ -5,6 +5,10 @@ import { mvp, type Credito, type ItemAgenda } from '../mvpApi';
 import { Button, Chip, Money, OQueE, Tag, formatarReais } from '../ds/componentes';
 import { Icone } from '../ds/Icone';
 import { Aviso, Cabecalho, Card, Erro, useAcao, useCarregar } from './comum';
+import { Folha, useFolha } from '../ux/Folha';
+import { avisos } from '../ux/avisos';
+import { CampoDinheiro, Segmentos, useSegmento } from '../ux/campos';
+import { AcaoFixa, Esqueleto, useAoVoltarParaApp } from '../ux/estrutura';
 
 /** Arquivo .ics para levar os vencimentos à agenda do celular (Google Agenda, Apple, Outlook). */
 export function gerarIcs(itens: ItemAgenda[]): string {
@@ -49,6 +53,7 @@ export function CalculadoraAvista() {
     e.preventDefault();
     const cents = parseReais(valor);
     if (!cents) return;
+    (document.activeElement as HTMLElement | null)?.blur?.();
     await executar(async () =>
       setR((await mvp.avistaOuParcelado({ valorCents: cents, descontoAvistaPct: Number(desconto.replace(',', '.')) || 0, parcelas: Number(parcelas) || 1, rendimentoMensalPct: Number(rende.replace(',', '.')) || 0 })).resultado),
     );
@@ -56,27 +61,22 @@ export function CalculadoraAvista() {
 
   return (
     <form className="stack" onSubmit={calcular} aria-label="À vista ou parcelado">
+      <CampoDinheiro rotulo="Valor total (R$)" value={valor} onChange={setValor} />
       <div className="two">
-        <label>
-          Valor total (R$)
-          <input inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="R$ 0,00" />
-        </label>
         <label>
           Desconto à vista (%)
-          <input inputMode="decimal" value={desconto} onChange={(e) => setDesconto(e.target.value)} />
+          <input inputMode="decimal" value={desconto} onChange={(e) => setDesconto(e.target.value)} enterKeyHint="next" />
         </label>
-      </div>
-      <div className="two">
         <label>
           Parcelas
-          <input type="number" min={1} max={24} value={parcelas} onChange={(e) => setParcelas(e.target.value)} />
-        </label>
-        <label>
-          Quanto seu dinheiro rende (% ao mês)
-          <input inputMode="decimal" value={rende} onChange={(e) => setRende(e.target.value)} />
+          <input inputMode="numeric" value={parcelas} onChange={(e) => setParcelas(e.target.value.replace(/\D/g, '').slice(0, 2))} enterKeyHint="next" />
         </label>
       </div>
-      <Button variant="ink" type="submit" disabled={ocupado}>
+      <label>
+        Quanto seu dinheiro rende (% ao mês)
+        <input inputMode="decimal" value={rende} onChange={(e) => setRende(e.target.value)} enterKeyHint="go" />
+      </label>
+      <Button variant="ink" size="lg" block type="submit" disabled={ocupado}>
         Comparar as duas opções
       </Button>
       <Erro mensagem={erro} />
@@ -127,19 +127,16 @@ function NovoCompromisso({ onSalvo }: { onSalvo: () => void }) {
       </div>
       <label>
         Descrição
-        <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Ex.: IPVA do carro" />
+        <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Ex.: IPVA do carro" autoCapitalize="sentences" enterKeyHint="next" />
       </label>
       <div className="two">
         <label>
           Vencimento
           <input type="date" value={vencimento} onChange={(e) => setVencimento(e.target.value)} />
         </label>
-        <label>
-          Valor (R$)
-          <input inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="R$ 0,00" />
-        </label>
+        <CampoDinheiro rotulo="Valor (R$)" value={valor} onChange={setValor} />
       </div>
-      <Button variant="ink" type="submit" disabled={ocupado || !vencimento}>
+      <Button variant="ink" size="lg" block type="submit" disabled={ocupado || !vencimento}>
         {vencimento ? 'Adicionar à agenda' : 'Escolha o vencimento'}
       </Button>
       <Erro mensagem={erro} />
@@ -155,21 +152,70 @@ const ORIGENS: Record<Credito['origem'], string> = {
   outro: 'Outro',
 };
 
-function Creditos() {
-  const lista = useCarregar(() => mvp.creditos());
+function NovoCredito({ onSalvo }: { onSalvo: () => void }) {
   const [origem, setOrigem] = useState<Credito['origem']>('restituicao_ir');
   const [valor, setValor] = useState('');
+  const [quando, setQuando] = useState('');
   const { ocupado, erro, executar } = useAcao();
-  const previsto = (lista.dados?.creditos ?? []).filter((c) => c.status === 'previsto').reduce((s, c) => s + c.valorCents, 0);
 
   async function salvar(e: FormEvent) {
     e.preventDefault();
     const cents = parseReais(valor);
     if (!cents) return;
-    if (await executar(() => mvp.criarCredito({ origem, valorCents: cents }))) {
+    if (await executar(() => mvp.criarCredito({ origem, valorCents: cents, previstoPara: quando || null }))) {
       setValor('');
-      void lista.recarregar();
+      onSalvo();
     }
+  }
+
+  return (
+    <form className="stack" onSubmit={salvar} aria-label="Novo crédito">
+      <label>
+        De onde vem
+        <select value={origem} onChange={(e) => setOrigem(e.target.value as Credito['origem'])}>
+          {Object.entries(ORIGENS).map(([k, v]) => (
+            <option key={k} value={k}>
+              {v}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="two">
+        <CampoDinheiro rotulo="Valor a receber" value={valor} onChange={setValor} />
+        <label>
+          Previsto para (opcional)
+          <input type="date" value={quando} onChange={(e) => setQuando(e.target.value)} />
+        </label>
+      </div>
+      <Button variant="ink" size="lg" block type="submit" disabled={ocupado || !parseReais(valor)}>
+        {parseReais(valor) ? 'Adicionar' : 'Digite o valor a receber'}
+      </Button>
+      <Erro mensagem={erro} />
+    </form>
+  );
+}
+
+function Creditos({ lista }: { lista: ReturnType<typeof useCarregar<{ creditos: Credito[] }>> }) {
+  const [recebidos, setRecebidos] = useState<Set<string>>(new Set());
+  const itens = (lista.dados?.creditos ?? []).map((c) => (recebidos.has(c.id) ? { ...c, status: 'recebido' as const } : c));
+  const previsto = itens.filter((c) => c.status === 'previsto').reduce((s, c) => s + c.valorCents, 0);
+
+  function receber(c: Credito) {
+    setRecebidos((r) => new Set(r).add(c.id)); // na hora; o servidor confirma em seguida
+    mvp
+      .marcarCredito(c.id, 'recebido')
+      .then(() => {
+        avisos.mostrar(`${ORIGENS[c.origem]} marcada como recebida.`);
+        void lista.recarregar();
+      })
+      .catch(() => {
+        setRecebidos((r) => {
+          const n = new Set(r);
+          n.delete(c.id);
+          return n;
+        });
+        avisos.mostrar('Não deu para salvar. Tente de novo.', { tom: 'erro' });
+      });
   }
 
   return (
@@ -178,27 +224,10 @@ function Creditos() {
         <span className="label">A receber</span>
         <Money cents={previsto} size="lg" />
       </div>
-      <form className="stack" onSubmit={salvar} aria-label="Novo crédito">
-        <label>
-          De onde vem
-          <select value={origem} onChange={(e) => setOrigem(e.target.value as Credito['origem'])}>
-            {Object.entries(ORIGENS).map(([k, v]) => (
-              <option key={k} value={k}>
-                {v}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="inline">
-          <input aria-label="Valor a receber" inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="R$ 0,00" />
-          <Button variant="ink" type="submit" disabled={ocupado}>
-            Adicionar
-          </Button>
-        </div>
-      </form>
-      <Erro mensagem={erro || lista.erro} />
+      <Erro mensagem={lista.erro} />
+      {itens.length === 0 && !lista.carregando && <p className="body-sm">Restituição, Nota Fiscal Paulista, valores esquecidos no banco: anote aqui para não perder de vista.</p>}
       <ul className="lista">
-        {lista.dados?.creditos.map((c) => (
+        {itens.map((c) => (
           <li key={c.id} className={c.status === 'recebido' ? 'apagado' : ''}>
             <div className="item-texto">
               <span>{ORIGENS[c.origem]}</span>
@@ -206,7 +235,7 @@ function Creditos() {
             </div>
             <Money cents={c.valorCents} signed={c.status === 'recebido'} />
             {c.status === 'previsto' && (
-              <Button variant="secondary" onClick={() => void mvp.marcarCredito(c.id, 'recebido').then(() => lista.recarregar())}>
+              <Button variant="secondary" onClick={() => receber(c)}>
                 Recebi
               </Button>
             )}
@@ -253,22 +282,54 @@ function Pendencias() {
   );
 }
 
+type Parte = 'vencimentos' | 'receber' | 'calcular';
+
 export function Agenda() {
   const ag = useCarregar(() => mvp.agenda());
-  const { executar, erro } = useAcao();
+  const creditos = useCarregar(() => mvp.creditos());
+  const [parte, setParte] = useSegmento<Parte>('agenda', 'vencimentos');
+  const novo = useFolha<'compromisso' | 'credito'>();
+  // "Paguei" muda na hora; se o servidor recusar, volta e avisa.
+  const [pagosLocal, setPagosLocal] = useState<Map<string, boolean>>(new Map());
   const hoje = todayISO();
+  useAoVoltarParaApp(ag.recarregar);
 
-  async function alternar(i: ItemAgenda) {
-    await executar(async () => {
-      if (i.id) await mvp.pagarCompromisso(i.id, !i.pago);
-      else await mvp.pagarRecorrente({ tipo: i.tipo, competencia: i.competencia!, vencimento: i.vencimento, pago: !i.pago, valorCents: i.valorCents ?? undefined });
-    });
-    void ag.recarregar();
+  const chave = (i: ItemAgenda) => `${i.tipo}-${i.competencia ?? i.id}`;
+  const itens = (ag.dados?.itens ?? []).map((i) => (pagosLocal.has(chave(i)) ? { ...i, pago: pagosLocal.get(chave(i))!, atrasado: pagosLocal.get(chave(i)) ? false : i.atrasado } : i));
+  const atrasados = itens.filter((i) => i.atrasado).length;
+
+  async function salvarPago(i: ItemAgenda, pago: boolean) {
+    if (i.id) await mvp.pagarCompromisso(i.id, pago);
+    else await mvp.pagarRecorrente({ tipo: i.tipo, competencia: i.competencia!, vencimento: i.vencimento, pago, valorCents: i.valorCents ?? undefined });
+  }
+
+  function alternar(i: ItemAgenda) {
+    const pago = !i.pago;
+    const k = chave(i);
+    setPagosLocal((m) => new Map(m).set(k, pago));
+    salvarPago(i, pago)
+      .then(() => {
+        if (pago) {
+          avisos.mostrar(`${i.titulo} marcado como pago.`, {
+            acao: {
+              rotulo: 'Desfazer',
+              fn: () => {
+                setPagosLocal((m) => new Map(m).set(k, false));
+                void salvarPago(i, false);
+              },
+            },
+          });
+        }
+      })
+      .catch(() => {
+        setPagosLocal((m) => new Map(m).set(k, !pago));
+        avisos.mostrar('Não deu para salvar. Tente de novo.', { tom: 'erro' });
+      });
   }
 
   // A explicação de cada tipo aparece só no próximo vencimento em aberto daquele tipo.
   const comExplicacao = new Set<string>();
-  for (const i of ag.dados?.itens ?? []) {
+  for (const i of itens) {
     if (!i.pago && !comExplicacao.has(i.tipo)) {
       comExplicacao.add(i.tipo);
       comExplicacao.add(`${i.tipo}|${i.vencimento}`);
@@ -276,58 +337,113 @@ export function Agenda() {
   }
 
   return (
-    <div className="page">
+    <div className={parte === 'calcular' ? 'page' : 'page com-acao'}>
       <Cabecalho titulo="Agenda" subtitulo="DAS, carnê-leão, IR, IPVA e IPTU num lugar só." />
-      <Card
-        titulo="Próximos vencimentos"
-        acao={
-          ag.dados && ag.dados.itens.length > 0 ? (
-            <Button variant="ghost" onClick={() => baixarIcs(ag.dados!.itens)}>
-              <Icone nome="calendario" tamanho={18} /> Levar para minha agenda
-            </Button>
-          ) : undefined
-        }
-      >
-        <Erro mensagem={ag.erro || erro} onTentar={() => void ag.recarregar()} />
-        {ag.dados && ag.dados.resumo.atrasados > 0 && (
-          <Aviso tom="atencao">
-            {ag.dados.resumo.atrasados === 1 ? '1 vencimento passou' : `${ag.dados.resumo.atrasados} vencimentos passaram`}. Se já pagou, é só marcar.
-          </Aviso>
-        )}
-        {ag.dados && ag.dados.itens.length === 0 && (
-          <p className="body-sm">Nada por aqui ainda. Ative MEI ou carnê-leão no perfil, ou adicione IPVA e IPTU logo abaixo.</p>
-        )}
-        <ul className="lista">
-          {ag.dados?.itens.map((i) => (
-            <li key={`${i.tipo}-${i.competencia ?? i.id}`} className={i.pago ? 'apagado' : ''}>
-              <span className={`item-data${i.atrasado ? ' atrasado' : ''}`}>{dataLista(i.vencimento, hoje)}</span>
-              <div className="item-texto">
-                <span>{i.titulo}</span>
-                <span>
-                  {i.atrasado && <Tag tone="attention">Venceu</Tag>} {i.previsto && <Tag>Data prevista</Tag>}
-                </span>
-                {comExplicacao.has(`${i.tipo}|${i.vencimento}`) && O_QUE_E[i.tipo] && <OQueE termo={i.titulo}>{O_QUE_E[i.tipo]}</OQueE>}
-              </div>
-              <div className="item-valor">
-                {i.valorCents ? <Money cents={i.valorCents} /> : null}
-                <Chip selected={i.pago} aria-label={`Pago: ${i.titulo} ${dataLista(i.vencimento, hoje)}`} onClick={() => void alternar(i)}>
-                  {i.pago && <Icone nome="check" tamanho={16} />}
-                  {i.pago ? 'Pago' : 'Paguei'}
-                </Chip>
-              </div>
-            </li>
-          ))}
-        </ul>
-      </Card>
-      <Card titulo="Adicionar IPVA, IPTU ou outro">
-        <NovoCompromisso onSalvo={() => void ag.recarregar()} />
-      </Card>
-      <Card titulo="À vista ou parcelado?">
-        <p className="body-sm">Descubra se o desconto à vista vale mais do que deixar o dinheiro rendendo.</p>
-        <CalculadoraAvista />
-      </Card>
-      <Creditos />
-      <Pendencias />
+
+      <Segmentos<Parte>
+        rotulo="Partes da agenda"
+        atual={parte}
+        onTrocar={setParte}
+        opcoes={[
+          { id: 'vencimentos', rotulo: 'Vencimentos', contador: atrasados },
+          { id: 'receber', rotulo: 'A receber' },
+          { id: 'calcular', rotulo: 'À vista ou parcelado?' },
+        ]}
+      />
+
+      {parte === 'vencimentos' && (
+        <>
+          {!ag.dados && ag.carregando ? (
+            <Esqueleto linhas={5} />
+          ) : (
+            <Card
+              titulo="Próximos vencimentos"
+              acao={
+                itens.length > 0 ? (
+                  <Button variant="ghost" onClick={() => baixarIcs(itens)} aria-label="Levar para a agenda do celular">
+                    <Icone nome="calendario" tamanho={18} /> Levar para o celular
+                  </Button>
+                ) : undefined
+              }
+            >
+              <Erro mensagem={ag.erro} onTentar={() => void ag.recarregar()} />
+              {atrasados > 0 && (
+                <Aviso tom="atencao">
+                  {atrasados === 1 ? '1 vencimento passou' : `${atrasados} vencimentos passaram`}. Se já pagou, é só marcar.
+                </Aviso>
+              )}
+              {ag.dados && itens.length === 0 && (
+                <p className="body-sm">Nada por aqui ainda. Ative MEI ou carnê-leão no perfil, ou adicione IPVA e IPTU.</p>
+              )}
+              <ul className="lista">
+                {itens.map((i) => (
+                  <li key={chave(i)} className={i.pago ? 'apagado' : ''}>
+                    <span className={`item-data${i.atrasado ? ' atrasado' : ''}`}>{dataLista(i.vencimento, hoje)}</span>
+                    <div className="item-texto">
+                      <span>{i.titulo}</span>
+                      <span>
+                        {i.atrasado && <Tag tone="attention">Venceu</Tag>} {i.previsto && <Tag>Data prevista</Tag>}
+                      </span>
+                      {comExplicacao.has(`${i.tipo}|${i.vencimento}`) && O_QUE_E[i.tipo] && <OQueE termo={i.titulo}>{O_QUE_E[i.tipo]}</OQueE>}
+                    </div>
+                    <div className="item-valor">
+                      {i.valorCents ? <Money cents={i.valorCents} /> : null}
+                      <Chip selected={i.pago} aria-label={`Pago: ${i.titulo} ${dataLista(i.vencimento, hoje)}`} onClick={() => alternar(i)}>
+                        {i.pago && <Icone nome="check" tamanho={16} />}
+                        {i.pago ? 'Pago' : 'Paguei'}
+                      </Chip>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+          <Pendencias />
+        </>
+      )}
+
+      {parte === 'receber' && <Creditos lista={creditos} />}
+
+      {parte === 'calcular' && (
+        <Card titulo="À vista ou parcelado?">
+          <p className="body-sm">Descubra se o desconto à vista vale mais do que deixar o dinheiro rendendo.</p>
+          <CalculadoraAvista />
+        </Card>
+      )}
+
+      {parte === 'vencimentos' && (
+        <AcaoFixa>
+          <Button variant="primary" size="lg" block onClick={() => novo.abrir('compromisso')}>
+            <Icone nome="mais" /> Adicionar IPVA, IPTU ou outro
+          </Button>
+        </AcaoFixa>
+      )}
+      {parte === 'receber' && (
+        <AcaoFixa>
+          <Button variant="primary" size="lg" block onClick={() => novo.abrir('credito')}>
+            <Icone nome="mais" /> Anotar valor a receber
+          </Button>
+        </AcaoFixa>
+      )}
+
+      <Folha aberta={novo.dado === 'compromisso'} onFechar={novo.fechar} titulo="Novo compromisso" descricao="O app avisa quando estiver chegando.">
+        <NovoCompromisso
+          onSalvo={() => {
+            novo.fechar();
+            avisos.mostrar('Adicionado à agenda.');
+            void ag.recarregar();
+          }}
+        />
+      </Folha>
+      <Folha aberta={novo.dado === 'credito'} onFechar={novo.fechar} titulo="Valor a receber">
+        <NovoCredito
+          onSalvo={() => {
+            novo.fechar();
+            avisos.mostrar('Anotado.');
+            void creditos.recarregar();
+          }}
+        />
+      </Folha>
     </div>
   );
 }

@@ -8,8 +8,11 @@ import { Sugestoes } from './telas/Sugestoes';
 import { BotaoOcultar, Aviso } from './telas/comum';
 import type { Aba } from './telas/Navegacao';
 import { Button, Iniciais, Money, OQueE, Tag } from './ds/componentes';
+import { Folha, useFolha } from './ux/Folha';
+import { avisos, comDesfazer } from './ux/avisos';
+import { AcaoFixa, Esqueleto, LinhaTocavel, useAoVoltarParaApp } from './ux/estrutura';
 import { Icone } from './ds/Icone';
-import { dataLista, lastDay, mesAno, monthLong, monthShort, pct, shiftMonth, todayISO } from './format';
+import { dataExtenso, dataLista, lastDay, mesAno, monthLong, monthShort, pct, shiftMonth, todayISO } from './format';
 
 export function Impostometro({ user, flash, onFlashSeen, irPara }: { user: User; flash?: string; onFlashSeen?: () => void; irPara?: (a: Aba) => void }) {
   const [month, setMonth] = useState(() => todayISO().slice(0, 7));
@@ -22,6 +25,10 @@ export function Impostometro({ user, flash, onFlashSeen, irPara }: { user: User;
   const [loading, setLoading] = useState(true);
   const [ofEnabled, setOfEnabled] = useState(false);
   const [connections, setConnections] = useState<Connection[]>([]);
+  const novoGasto = useFolha();
+  const detalhe = useFolha<Expense>();
+  const [ocultos, setOcultos] = useState<Set<string>>(new Set());
+  const [mostrarTodos, setMostrarTodos] = useState(false);
 
   useEffect(() => {
     api.rates().then(setRates).catch(() => setError('Não consegui carregar a tabela de impostos.'));
@@ -73,6 +80,9 @@ export function Impostometro({ user, flash, onFlashSeen, irPara }: { user: User;
     return () => clearTimeout(t);
   }, [flash, onFlashSeen, load]);
 
+  // Tirou do bolso ou voltou de outro app: atualiza sem a pessoa precisar pedir.
+  useAoVoltarParaApp(useCallback(() => void load(), [load]));
+
   async function loadMore() {
     if (!nextCursor) return;
     const list = await api.expenses(`${month}-01`, lastDay(month), nextCursor);
@@ -85,16 +95,32 @@ export function Impostometro({ user, flash, onFlashSeen, irPara }: { user: User;
     auth.setUser(u);
   }
 
-  async function remove(id: string) {
-    if (!window.confirm('Apagar este gasto?')) return;
-    await api.deleteExpense(id);
-    await load();
+  /** Apagar não pergunta "tem certeza?": some na hora e dá 5 s para desfazer. */
+  function remove(e: Expense) {
+    detalhe.fechar();
+    comDesfazer({
+      texto: 'Gasto apagado.',
+      aoAgendar: () => setOcultos((o) => new Set(o).add(e.id)),
+      aoDesfazer: () =>
+        setOcultos((o) => {
+          const n = new Set(o);
+          n.delete(e.id);
+          return n;
+        }),
+      executar: async () => {
+        await api.deleteExpense(e.id);
+        await load();
+      },
+    });
   }
 
   const isCurrentMonth = month >= todayISO().slice(0, 7);
 
+  const visiveis = expenses.filter((e) => !ocultos.has(e.id));
+  const lista = mostrarTodos ? visiveis : visiveis.slice(0, 5);
+
   return (
-    <div className="page">
+    <div className="page com-acao">
       <header className="topbar">
         <div className="topbar-titulo">
           <h1>Início</h1>
@@ -138,34 +164,62 @@ export function Impostometro({ user, flash, onFlashSeen, irPara }: { user: User;
         </p>
       )}
 
-      <section className="card destaque" aria-busy={loading}>
-        <span className="overline">Impostos em {monthLong(month)}</span>
-        <Money cents={summary?.totals.taxCents ?? 0} size="xl" />
-        <p className="body-sm">
-          de <Money cents={summary?.totals.spentCents ?? 0} size="sm" /> que você gastou ({pct(summary?.totals.effectivePct ?? 0)})
-        </p>
-        {summary && summary.totals.taxCents > 0 && <SphereBar s={summary} />}
-        <p className="caption">
-          No ano, até agora: <Money cents={summary?.yearToDate.taxCents ?? 0} size="sm" /> em impostos.
-        </p>
-        {summary?.illustrative && <p className="caption">As alíquotas ainda são ilustrativas: a tabela oficial do IBPT entra antes do lançamento.</p>}
-      </section>
+      {!summary && loading ? (
+        <Esqueleto destaque linhas={3} />
+      ) : (
+        <section className="card destaque" aria-busy={loading}>
+          <span className="overline">Impostos em {monthLong(month)}</span>
+          <Money cents={summary?.totals.taxCents ?? 0} size="xl" />
+          <p className="body-sm">
+            de <Money cents={summary?.totals.spentCents ?? 0} size="sm" /> que você gastou ({pct(summary?.totals.effectivePct ?? 0)})
+          </p>
+          {summary && summary.totals.taxCents > 0 && <SphereBar s={summary} />}
+          <p className="caption">
+            No ano, até agora: <Money cents={summary?.yearToDate.taxCents ?? 0} size="sm" /> em impostos.
+          </p>
+          {summary?.illustrative && <p className="caption">As alíquotas ainda são ilustrativas: a tabela oficial do IBPT entra antes do lançamento.</p>}
+        </section>
+      )}
 
       {irPara && <Sugestoes irPara={irPara} />}
 
+      <section className="card">
+        <div className="card-head">
+          <h2>Gastos de {monthLong(month).split(' de ')[0]}</h2>
+          {visiveis.length > 0 && <span className="label">{visiveis.length}{nextCursor ? '+' : ''}</span>}
+        </div>
+        {visiveis.length === 0 && !loading && <p className="body-sm">Nada lançado em {monthLong(month)}. Toque em “Novo gasto” ou leia uma nota.</p>}
+        <ul className="lista">
+          {lista.map((e) => (
+            <LinhaTocavel key={e.id} rotulo={`${e.description || rates?.categories[e.category]?.label || e.category}, ${dataLista(e.spentOn)}`} onClick={() => detalhe.abrir(e)}>
+              <div className="item-texto">
+                <span>{e.description || rates?.categories[e.category]?.label || e.category}</span>
+                <span className="label">
+                  {dataLista(e.spentOn)} · {rates?.categories[e.category]?.label ?? e.category}
+                </span>
+              </div>
+              <div className="item-valor">
+                <Money cents={-e.amountCents} signed tone="neutral" />
+                <span className="label">
+                  <Money cents={e.tax.totalCents} size="sm" /> imposto
+                </span>
+              </div>
+            </LinhaTocavel>
+          ))}
+        </ul>
+        {!mostrarTodos && visiveis.length > 5 && (
+          <Button variant="secondary" block onClick={() => setMostrarTodos(true)}>
+            Ver todos os {visiveis.length} gastos
+          </Button>
+        )}
+        {(mostrarTodos || visiveis.length <= 5) && nextCursor && (
+          <Button variant="secondary" block onClick={() => void loadMore()}>
+            Carregar mais gastos
+          </Button>
+        )}
+      </section>
+
       <AnualCard versao={summary?.yearToDate.taxCents ?? 0} />
-
-      <section className="card">
-        <h2>Novo gasto</h2>
-        {rates ? <ExpenseForm rates={rates} defaultUf={user.uf} month={month} onSaved={load} /> : <p className="caption">Carregando…</p>}
-      </section>
-
-      <section className="card">
-        <h2>Últimos meses</h2>
-        {history && <HistoryChart history={history} current={month} />}
-      </section>
-
-      {ofEnabled && <BankConnections connections={connections} onChange={load} />}
 
       <section className="card">
         <h2>Por categoria</h2>
@@ -189,41 +243,93 @@ export function Impostometro({ user, flash, onFlashSeen, irPara }: { user: User;
       </section>
 
       <section className="card">
-        <h2>Gastos</h2>
-        {expenses.length === 0 && !loading && <p className="body-sm">Nada lançado em {monthLong(month)}.</p>}
-        <ul className="lista">
-          {expenses.map((e) => (
-            <li key={e.id}>
-              <div className="item-texto">
-                <span>{e.description || rates?.categories[e.category]?.label || e.category}</span>
-                <span className="label">
-                  {dataLista(e.spentOn)} · {rates?.categories[e.category]?.label ?? e.category} · {e.uf}
-                </span>
-                {e.source === 'openfinance' && <Tag tone="primary">Banco</Tag>}
-                {e.source === 'nfce' && <Tag tone="primary">Nota</Tag>}
-              </div>
-              <div className="item-valor">
-                <Money cents={-e.amountCents} signed tone="neutral" />
-                <span className="label">
-                  <Money cents={e.tax.totalCents} size="sm" /> imposto
-                </span>
-              </div>
-              <button type="button" className="icon-btn sem-borda" aria-label="Apagar" onClick={() => void remove(e.id)}>
-                <Icone nome="lixeira" tamanho={18} />
-              </button>
-            </li>
-          ))}
-        </ul>
-        {nextCursor && (
-          <Button variant="secondary" block onClick={() => void loadMore()}>
-            Carregar mais gastos
-          </Button>
-        )}
+        <h2>Últimos meses</h2>
+        {history && <HistoryChart history={history} current={month} />}
       </section>
+
+      {ofEnabled && <BankConnections connections={connections} onChange={load} />}
 
       <footer className="rodape">
         Valores aproximados, conforme a Lei 12.741/2012. Fonte das alíquotas: {rates?.source ?? '—'}.
       </footer>
+
+      <AcaoFixa>
+        <Button variant="primary" size="lg" block onClick={() => novoGasto.abrir()}>
+          <Icone nome="mais" /> Novo gasto
+        </Button>
+      </AcaoFixa>
+
+      <Folha aberta={novoGasto.aberta} onFechar={novoGasto.fechar} titulo="Novo gasto" descricao="O imposto embutido aparece enquanto você digita.">
+        {rates ? (
+          <ExpenseForm
+            rates={rates}
+            defaultUf={user.uf}
+            month={month}
+            onSaved={async () => {
+              novoGasto.fechar();
+              avisos.mostrar('Gasto adicionado.');
+              await load();
+            }}
+          />
+        ) : (
+          <Esqueleto linhas={4} />
+        )}
+      </Folha>
+
+      <Folha aberta={detalhe.aberta} onFechar={detalhe.fechar} titulo={detalhe.dado ? detalhe.dado.description || rates?.categories[detalhe.dado.category]?.label || 'Gasto' : 'Gasto'}>
+        {detalhe.dado && (
+          <>
+            <Money cents={-detalhe.dado.amountCents} signed tone="neutral" size="lg" />
+            <dl className="detalhe">
+              <div>
+                <dt>Data</dt>
+                <dd>{dataExtenso(detalhe.dado.spentOn)}</dd>
+              </div>
+              <div>
+                <dt>Categoria</dt>
+                <dd>{rates?.categories[detalhe.dado.category]?.label ?? detalhe.dado.category}</dd>
+              </div>
+              <div>
+                <dt>Estado da compra</dt>
+                <dd>{detalhe.dado.uf}</dd>
+              </div>
+              <div>
+                <dt>Imposto federal</dt>
+                <dd>
+                  <Money cents={detalhe.dado.tax.federalCents} size="sm" />
+                </dd>
+              </div>
+              <div>
+                <dt>ICMS (estadual)</dt>
+                <dd>
+                  <Money cents={detalhe.dado.tax.estadualCents} size="sm" />
+                </dd>
+              </div>
+              {detalhe.dado.tax.municipalCents > 0 && (
+                <div>
+                  <dt>ISS (municipal)</dt>
+                  <dd>
+                    <Money cents={detalhe.dado.tax.municipalCents} size="sm" />
+                  </dd>
+                </div>
+              )}
+              <div>
+                <dt>Total de imposto</dt>
+                <dd>
+                  <Money cents={detalhe.dado.tax.totalCents} size="sm" /> ({pct(detalhe.dado.tax.ratePct)})
+                </dd>
+              </div>
+              <div>
+                <dt>Origem</dt>
+                <dd>{detalhe.dado.source === 'openfinance' ? <Tag tone="primary">Banco</Tag> : detalhe.dado.source === 'nfce' ? <Tag tone="primary">Nota fiscal</Tag> : 'Lançado por você'}</dd>
+              </div>
+            </dl>
+            <Button variant="secondary" block className="acao-perigosa" onClick={() => remove(detalhe.dado!)}>
+              <Icone nome="lixeira" tamanho={18} /> Apagar gasto
+            </Button>
+          </>
+        )}
+      </Folha>
     </div>
   );
 }

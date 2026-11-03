@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { UFS, calculateTax, isUF, type TaxRatesTable } from '@openwallet/tax';
 import { api, ApiError } from './api';
-import { lastDay, parseMoney, pct, todayISO } from './format';
+import { lastDay, parseReais, pct, todayISO } from './format';
 import { Button, Money } from './ds/componentes';
+import { CampoDinheiro } from './ux/campos';
 
 /** Formulário de novo gasto, com prévia do imposto calculada no próprio aparelho. */
 export function ExpenseForm({ rates, defaultUf, month, onSaved }: { rates: TaxRatesTable; defaultUf: string; month: string; onSaved: () => Promise<void> }) {
@@ -21,7 +22,7 @@ export function ExpenseForm({ rates, defaultUf, month, onSaved }: { rates: TaxRa
   useEffect(() => setUf(defaultUf), [defaultUf]);
   useEffect(() => setSpentOn(defaultDate), [defaultDate]);
 
-  const cents = parseMoney(amount);
+  const cents = parseReais(amount);
   // Prévia calculada no próprio aparelho: instantânea e sem carga no servidor.
   const preview = useMemo(
     () => (cents && isUF(uf) ? calculateTax(rates, { amountCents: cents, category, uf }) : null),
@@ -49,10 +50,7 @@ export function ExpenseForm({ rates, defaultUf, month, onSaved }: { rates: TaxRa
   return (
     <form className="stack" onSubmit={submit}>
       <div className="two">
-        <label>
-          Valor (R$)
-          <input inputMode="decimal" placeholder="0,00" value={amount} onChange={(e) => setAmount(e.target.value)} required />
-        </label>
+        <CampoDinheiro rotulo="Valor" value={amount} onChange={setAmount} required />
         <label>
           Data
           <input type="date" value={spentOn} max={today} onChange={(e) => setSpentOn(e.target.value)} required />
@@ -80,7 +78,7 @@ export function ExpenseForm({ rates, defaultUf, month, onSaved }: { rates: TaxRa
       </div>
       <label>
         Descrição (opcional)
-        <input maxLength={200} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Ex.: posto da esquina" />
+        <input maxLength={200} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Ex.: posto da esquina" enterKeyHint="done" autoCapitalize="sentences" />
       </label>
       <p className="ow-note" aria-live="polite">
         {preview ? (
@@ -92,7 +90,7 @@ export function ExpenseForm({ rates, defaultUf, month, onSaved }: { rates: TaxRa
         )}
       </p>
       {error && <p className="error" role="alert">{error}</p>}
-      <Button variant="ink" type="submit" disabled={busy}>
+      <Button variant="ink" size="lg" block type="submit" disabled={busy}>
         {busy ? 'Salvando…' : 'Adicionar gasto'}
       </Button>
     </form>

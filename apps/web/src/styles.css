@@ -138,3 +138,112 @@ footer.rodape { text-align: center; font-size: 12px; line-height: 16px; color: v
 select.uf-pick { width: auto; min-width: 68px; border-radius: var(--radius-pill); padding: 0 var(--space-3); font-weight: 500; }
 .lista .item-texto > .ow-tag { justify-self: start; }
 .lista .item-valor .label { white-space: nowrap; }
+
+/* ===================== UX mobile ===================== */
+
+/* Espaço para a ação fixa + abas no pé da tela */
+.page.com-acao { padding-bottom: calc(96px + 72px + env(safe-area-inset-bottom)); }
+
+/* Ação principal fixa, logo acima das abas (zona do polegar) */
+.acao-fixa { position: fixed; left: 0; right: 0; bottom: calc(61px + max(var(--space-2), env(safe-area-inset-bottom))); z-index: 9;
+  padding: var(--space-3) max(var(--space-5), env(safe-area-inset-left)) var(--space-3);
+  background: linear-gradient(to bottom, transparent, var(--surface) 30%); display: flex; gap: var(--space-2); }
+.acao-fixa > * { max-width: 680px; margin: 0 auto; }
+@media (min-width: 760px) { .acao-fixa { max-width: 720px; margin: 0 auto; } }
+
+/* Abas internas da tela (segmentos), fixas no topo ao rolar */
+.segmentos { position: sticky; top: 0; z-index: 5; display: flex; gap: var(--space-1); overflow-x: auto; scrollbar-width: none;
+  margin: 0 calc(-1 * var(--space-5)); padding: var(--space-2) var(--space-5); background: var(--surface); }
+.segmentos::-webkit-scrollbar { display: none; }
+.segmentos button { flex-shrink: 0; min-height: 40px; padding: 0 var(--space-4); border-radius: var(--radius-pill); border: 1px solid var(--line-strong);
+  background: var(--surface-raised); color: var(--ink); font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: var(--space-2); }
+.segmentos button.is-selected { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+.segmentos button:focus-visible { outline: 2px solid transparent; box-shadow: var(--focus-ring); }
+.segmentos__contador { min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--radius-pill); background: var(--attention-soft); color: var(--attention); font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; }
+
+/* Folha inferior */
+body.com-folha { overflow: hidden; }
+.folha-fundo { position: fixed; inset: 0; z-index: 30; background: rgb(0 0 0 / 0.4); display: flex; align-items: flex-end; justify-content: center; animation: aparecer 160ms ease-out; }
+.folha { width: 100%; max-width: 560px; max-height: calc(100dvh - 24px); display: flex; flex-direction: column; background: var(--surface-raised);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0; border: 1px solid var(--line); border-bottom: 0; outline: none;
+  padding-bottom: env(safe-area-inset-bottom); animation: subir 220ms cubic-bezier(0.2, 0.8, 0.2, 1); transition: transform 180ms ease-out; }
+.folha-alca { display: flex; justify-content: center; padding: var(--space-2) 0 var(--space-1); cursor: grab; touch-action: none; }
+.folha-alca span { width: 40px; height: 5px; border-radius: var(--radius-pill); background: var(--line-strong); }
+.folha-topo { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-3); padding: 0 var(--space-5) var(--space-3); }
+.folha-topo > div { display: grid; gap: var(--space-1); }
+.folha-corpo { overflow-y: auto; overscroll-behavior: contain; padding: 0 var(--space-5) var(--space-5); display: grid; gap: var(--space-3); }
+.folha-rodape { padding: var(--space-3) var(--space-5) var(--space-4); border-top: 1px solid var(--line); display: flex; gap: var(--space-2); }
+@media (min-width: 760px) { .folha-fundo { align-items: center; } .folha { border-radius: var(--radius-xl); border-bottom: 1px solid var(--line); } }
+@keyframes subir { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes aparecer { from { opacity: 0; } to { opacity: 1; } }
+
+/* Avisos rápidos (toasts), acima das abas */
+.avisos { position: fixed; left: 0; right: 0; bottom: calc(72px + env(safe-area-inset-bottom)); z-index: 40; display: grid; justify-items: center; gap: var(--space-2); padding: 0 var(--space-5); pointer-events: none; }
+.aviso-rapido { pointer-events: auto; width: min(100%, 520px); min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4); border-radius: var(--radius-md); background: var(--ink); color: var(--on-ink); font-size: 14px; line-height: 20px; animation: subir-pouco 200ms ease-out; }
+.aviso-rapido--erro { background: var(--negative); color: var(--surface-raised); }
+.aviso-rapido__acao { min-height: var(--touch-min); padding: 0 var(--space-3); border: 0; border-radius: var(--radius-sm); background: transparent; color: inherit; font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; }
+@keyframes subir-pouco { from { transform: translateY(12px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* Campos com prefixo e mensagens */
+.campo { display: grid; gap: var(--space-1); }
+.campo > label { display: block; }
+.campo-prefixo { position: relative; }
+.campo-prefixo > span { position: absolute; left: var(--space-3); top: 50%; transform: translateY(-50%); font-family: var(--font-mono); font-size: 15px; color: var(--ink-muted); pointer-events: none; }
+.campo-prefixo > input { padding-left: 40px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.campo-erro { font-size: 13px; line-height: 19px; color: var(--negative); }
+input[aria-invalid='true'] { border-color: var(--negative); }
+
+/* Linhas de lista inteiras tocáveis */
+.lista > li.linha-tocavel { padding: 0; }
+.linha-tocavel > button { width: 100%; min-height: 56px; display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) 0; background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.lista > li.linha-tocavel:first-child > button { padding-top: 0; }
+.lista > li.linha-tocavel:last-child > button { padding-bottom: 0; }
+.linha-tocavel > button:focus-visible { outline: 2px solid transparent; box-shadow: var(--focus-ring); border-radius: var(--radius-sm); }
+.linha-tocavel > button:active { opacity: 0.7; }
+.linha-tocavel__seta { color: var(--ink-muted); flex-shrink: 0; }
+
+/* Esqueletos de carregamento */
+.esqueleto { gap: var(--space-3); }
+.esq { display: block; border-radius: var(--radius-sm); background: var(--surface-sunken); position: relative; overflow: hidden; }
+.esq--valor { height: 36px; width: 55%; }
+.esq--linha { height: 14px; }
+.esq::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.35), transparent); animation: brilho 1.4s infinite; }
+@keyframes brilho { to { transform: translateX(100%); } }
+
+/* Sem conexão */
+.aviso-conexao { position: sticky; top: 0; z-index: 20; padding: var(--space-2) var(--space-5); padding-top: max(var(--space-2), env(safe-area-inset-top)); background: var(--attention-soft); color: var(--attention); font-size: 13px; line-height: 19px; text-align: center; }
+
+/* Detalhe dentro da folha: pares rótulo/valor */
+.detalhe { display: grid; gap: 0; }
+.detalhe > div { display: flex; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) 0; border-top: 1px solid var(--line); }
+.detalhe > div:first-child { border-top: 0; padding-top: 0; }
+.detalhe dt { color: var(--ink-muted); font-size: 14px; }
+.detalhe dd { margin: 0; text-align: right; font-size: 14px; }
+.acao-perigosa { color: var(--negative); }
+
+/* Mudança de tela mais suave */
+.page { animation: aparecer 140ms ease-out; }
+
+/* Toque: sem atraso nem seleção acidental de texto em controles */
+button, .linha-tocavel, .abas button, .segmentos button { touch-action: manipulation; -webkit-user-select: none; user-select: none; }
+
+/* Quem pede menos movimento no sistema não vê animações */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; scroll-behavior: auto !important; }
+}
+.ow-btn.acao-perigosa-forte { background: var(--negative); color: var(--surface-raised); }
+
+/* Barra de pergunta do assistente (fixa, como num app de mensagens) */
+.barra-pergunta { width: 100%; max-width: 680px; margin: 0 auto; }
+.barra-pergunta input { border-radius: var(--radius-pill); padding: 0 var(--space-4); }
+.barra-pergunta .ow-btn { width: var(--touch-min); padding: 0; }
+.digitando { display: inline-flex; gap: 4px; padding: 4px 0; }
+.digitando i { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-muted); animation: pulso 1s infinite; }
+.digitando i:nth-child(2) { animation-delay: 0.15s; }
+.digitando i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes pulso { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+
+/* Avisos nunca cobrem a ação fixa nem os botões de uma folha aberta */
+body:has(.acao-fixa) .avisos { bottom: calc(72px + 72px + env(safe-area-inset-bottom)); }
+body.com-folha .avisos { bottom: auto; top: max(var(--space-4), env(safe-area-inset-top)); }

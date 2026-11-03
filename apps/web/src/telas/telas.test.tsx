@@ -3,6 +3,8 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../api';
 import { criarMvpFalso, umPerfil } from '../test/mvpMock';
+import { Avisos, avisos } from '../ux/avisos';
+import { _limparSegmentos } from '../ux/campos';
 
 const falso = criarMvpFalso();
 vi.mock('../mvpApi', () => ({ mvp: falso }));
@@ -17,9 +19,26 @@ const { Navegacao } = await import('./Navegacao');
 
 beforeEach(() => {
   Object.values(falso).forEach((f) => f.mockReset());
+  avisos._limpar();
+  _limparSegmentos();
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date('2026-11-03T15:00:00Z'));
 });
+
+/** A tela com a área de avisos rápidos, como no app. */
+const comAvisos = (ui: React.ReactElement) => render(
+  <>
+    {ui}
+    <Avisos />
+  </>,
+);
+
+/** Liga relógio falso de setTimeout (para o "Desfazer") sem travar o userEvent. */
+function relogioRapido() {
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'], shouldAdvanceTime: true });
+  vi.setSystemTime(new Date('2026-11-03T15:00:00Z'));
+  return userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+}
 
 const cashbackPadrao = {
   perfilPreenchido: true,
@@ -59,14 +78,17 @@ describe('Notas e cashback', () => {
   it('registra a nota digitada com o valor informado', async () => {
     falso.lerNota.mockResolvedValue({ nota: { emitenteNome: 'FARMACIA', valorCents: 10_000 }, gastos: [{ categoria: 'saude', valorCents: 10_000, impostoCents: 2_700 }] });
     const user = userEvent.setup();
-    render(<Notas />);
+    comAvisos(<Notas />);
 
-    await user.type(screen.getByLabelText(/chave de acesso/i), '3526 1011');
-    await user.type(screen.getByLabelText(/valor total/i), '100,00');
-    await user.click(screen.getByRole('button', { name: 'Registrar nota' }));
+    await user.click(screen.getByRole('button', { name: 'Ler QR code da nota' }));
+    const folha = screen.getByRole('dialog', { name: 'Registrar nota fiscal' });
+    await user.type(within(folha).getByLabelText(/chave de acesso/i), '3526 1011');
+    await user.type(within(folha).getByLabelText(/valor total/i), '100,00');
+    await user.click(within(folha).getByRole('button', { name: 'Registrar nota' }));
 
     expect(falso.lerNota).toHaveBeenCalledWith('3526 1011', 10_000);
     expect(await screen.findByText(/FARMACIA registrada/)).toHaveTextContent('R$ 27,00');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(falso.notas).toHaveBeenCalledTimes(2);
   });
 
@@ -75,10 +97,13 @@ describe('Notas e cashback', () => {
     const user = userEvent.setup();
     render(<Notas />);
 
+    await user.click(screen.getByRole('button', { name: 'Ler QR code da nota' }));
+    expect(screen.getByRole('button', { name: 'Cole o link ou a chave para registrar' })).toBeDisabled();
     await user.type(screen.getByLabelText(/chave de acesso/i), '123');
     await user.click(screen.getByRole('button', { name: 'Registrar nota' }));
 
     expect(await screen.findByText(/Dígito verificador/)).toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
   it('quem não tem direito vê os motivos', async () => {
@@ -138,6 +163,8 @@ describe('Imposto de Renda', () => {
     const user = userEvent.setup();
     render(<Ir />);
 
+    await user.click(screen.getByRole('tab', { name: 'Simular salário' }));
+    expect(screen.getByRole('button', { name: 'Digite o salário para calcular' })).toBeDisabled();
     await user.type(screen.getByLabelText('Salário bruto (R$)'), '6.000');
     await user.click(screen.getByRole('button', { name: 'Calcular imposto do mês' }));
 
@@ -149,15 +176,22 @@ describe('Imposto de Renda', () => {
     falso.criarDocumento.mockResolvedValue({});
     falso.criarRendimento.mockResolvedValue({});
     const user = userEvent.setup();
-    render(<Ir />);
+    comAvisos(<Ir />);
     await screen.findByText('Você deve receber de volta');
 
+    await user.click(screen.getByRole('tab', { name: 'Recibos' }));
+    await user.click(screen.getByRole('button', { name: /Guardar recibo/ }));
     const recibo = screen.getByRole('form', { name: 'Novo recibo' });
     await user.type(within(recibo).getByLabelText(/Valor do recibo/), '200');
     await user.type(within(recibo).getByLabelText(/Quem recebeu/), 'Clínica');
+    await user.type(within(recibo).getByLabelText(/CPF ou CNPJ/), '11222333000181');
+    expect(within(recibo).getByLabelText(/CPF ou CNPJ/)).toHaveValue('11.222.333/0001-81');
     await user.click(within(recibo).getByRole('button', { name: 'Guardar recibo' }));
-    expect(falso.criarDocumento).toHaveBeenCalledWith(expect.objectContaining({ tipo: 'saude', valorCents: 20_000, prestadorNome: 'Clínica', prestadorDoc: null }));
+    expect(falso.criarDocumento).toHaveBeenCalledWith(expect.objectContaining({ tipo: 'saude', valorCents: 20_000, prestadorNome: 'Clínica', prestadorDoc: '11222333000181' }));
+    expect(await screen.findByText('Recibo guardado.')).toBeInTheDocument();
 
+    await user.click(screen.getByRole('tab', { name: 'Rendimentos' }));
+    await user.click(screen.getByRole('button', { name: /Adicionar rendimento/ }));
     const rend = screen.getByRole('form', { name: 'Novo rendimento' });
     await user.type(within(rend).getByLabelText(/Valor bruto/), '5000');
     await user.type(within(rend).getByLabelText(/IR retido/), '100');
@@ -169,14 +203,25 @@ describe('Imposto de Renda', () => {
   it('apaga recibo e rendimento', async () => {
     falso.apagarDocumento.mockResolvedValue(undefined);
     falso.apagarRendimento.mockResolvedValue(undefined);
-    const user = userEvent.setup();
-    render(<Ir />);
+    const user = relogioRapido();
+    comAvisos(<Ir />);
 
-    await user.click(await screen.findByRole('button', { name: /Apagar recibo de Dra. Ana/ }));
-    await user.click(screen.getByRole('button', { name: /Apagar rendimento/ }));
+    await user.click(screen.getByRole('tab', { name: 'Recibos' }));
+    await user.click(await screen.findByRole('button', { name: 'Recibo de Dra. Ana' }));
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: /Apagar recibo/ }));
+    expect(screen.queryByRole('button', { name: 'Recibo de Dra. Ana' })).not.toBeInTheDocument();
+    expect(falso.apagarDocumento).not.toHaveBeenCalled(); // ainda dá para desfazer
+    await user.click(screen.getByRole('button', { name: 'Desfazer' }));
+    expect(screen.getByRole('button', { name: 'Recibo de Dra. Ana' })).toBeInTheDocument();
 
-    expect(falso.apagarDocumento).toHaveBeenCalledWith('d1');
-    expect(falso.apagarRendimento).toHaveBeenCalledWith('r1');
+    await user.click(screen.getByRole('tab', { name: 'Rendimentos' }));
+    await user.click(await screen.findByRole('button', { name: /Salário \(carteira assinada\)/ }));
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: /Apagar rendimento/ }));
+    vi.advanceTimersByTime(5_000);
+
+    await waitFor(() => expect(falso.apagarRendimento).toHaveBeenCalledWith('r1'));
+    expect(falso.apagarDocumento).not.toHaveBeenCalled();
+    vi.useRealTimers();
   });
 });
 
@@ -193,14 +238,18 @@ describe('Agenda', () => {
   });
 
   it('lista vencimentos, atrasos, créditos e pendências; a dica aparece uma vez por tipo', async () => {
+    const user = userEvent.setup();
     render(<Agenda />);
 
     expect(await screen.findByText(/1 vencimento passou/)).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Vencimentos/ })).toHaveTextContent('1');
     expect(screen.getAllByRole('button', { name: /O que é isso\? DAS do MEI/ })).toHaveLength(1);
     expect(screen.getByText('Data prevista')).toBeInTheDocument();
     expect(screen.getByText('Venceu')).toBeInTheDocument();
     expect(await screen.findByText(/IPVA em atraso/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Regularize' })).toHaveAttribute('href', 'https://www.regularize.pgfn.gov.br');
+
+    await user.click(screen.getByRole('tab', { name: 'A receber' }));
     expect(await screen.findAllByText('R$ 850,00')).toHaveLength(2);
   });
 
@@ -208,13 +257,19 @@ describe('Agenda', () => {
     falso.pagarRecorrente.mockResolvedValue({ pago: true });
     falso.pagarCompromisso.mockResolvedValue({});
     const user = userEvent.setup();
-    render(<Agenda />);
+    comAvisos(<Agenda />);
 
-    await user.click(await screen.findByRole('button', { name: 'Pago: DAS do MEI 19 nov' }));
+    const das = await screen.findByRole('button', { name: 'Pago: DAS do MEI 19 nov' });
+    await user.click(das);
+    expect(das).toHaveAttribute('aria-pressed', 'true'); // muda na hora
+    expect(await screen.findByText('DAS do MEI marcado como pago.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Pago: IPVA, do carro 21 jan 2027' }));
 
     expect(falso.pagarRecorrente).toHaveBeenCalledWith({ tipo: 'das_mei', competencia: '2026-10', vencimento: '2026-11-19', pago: true, valorCents: 8_605 });
     expect(falso.pagarCompromisso).toHaveBeenCalledWith('o1', true);
+
+    await user.click(screen.getAllByRole('button', { name: 'Desfazer' }).at(-1)!);
+    expect(falso.pagarCompromisso).toHaveBeenLastCalledWith('o1', false);
   });
 
   it('adiciona IPVA, crédito e marca crédito recebido', async () => {
@@ -222,21 +277,28 @@ describe('Agenda', () => {
     falso.criarCredito.mockResolvedValue({});
     falso.marcarCredito.mockResolvedValue({});
     const user = userEvent.setup();
-    render(<Agenda />);
+    comAvisos(<Agenda />);
     await screen.findByText(/1 vencimento passou/);
 
+    await user.click(screen.getByRole('button', { name: /Adicionar IPVA, IPTU ou outro/ }));
     const form = screen.getByRole('form', { name: 'Novo compromisso' });
+    expect(within(form).getByRole('button', { name: 'Escolha o vencimento' })).toBeDisabled();
     await user.type(within(form).getByLabelText('Vencimento'), '2027-03-10');
     await user.type(within(form).getByLabelText('Valor (R$)'), '1.900');
     await user.click(within(form).getByRole('button', { name: 'Adicionar à agenda' }));
     expect(falso.criarCompromisso).toHaveBeenCalledWith({ tipo: 'ipva', titulo: 'IPVA', vencimento: '2027-03-10', valorCents: 190_000 });
+    expect(await screen.findByText('Adicionado à agenda.')).toBeInTheDocument();
 
-    await user.type(screen.getByLabelText('Valor a receber'), '50');
-    await user.click(within(screen.getByRole('form', { name: 'Novo crédito' })).getByRole('button', { name: 'Adicionar' }));
-    expect(falso.criarCredito).toHaveBeenCalledWith({ origem: 'restituicao_ir', valorCents: 5_000 });
+    await user.click(screen.getByRole('tab', { name: 'A receber' }));
+    await user.click(screen.getByRole('button', { name: /Anotar valor a receber/ }));
+    const credito = screen.getByRole('form', { name: 'Novo crédito' });
+    await user.type(within(credito).getByLabelText('Valor a receber'), '50');
+    await user.click(within(credito).getByRole('button', { name: 'Adicionar' }));
+    expect(falso.criarCredito).toHaveBeenCalledWith({ origem: 'restituicao_ir', valorCents: 5_000, previstoPara: null });
 
     await user.click(await screen.findByRole('button', { name: 'Recebi' }));
     expect(falso.marcarCredito).toHaveBeenCalledWith('c1', 'recebido');
+    expect(screen.queryByRole('button', { name: 'Recebi' })).not.toBeInTheDocument();
   });
 
   it('calculadora à vista ou parcelado', async () => {
@@ -244,6 +306,7 @@ describe('Agenda', () => {
     const user = userEvent.setup();
     render(<Agenda />);
 
+    await user.click(screen.getByRole('tab', { name: 'À vista ou parcelado?' }));
     const form = screen.getByRole('form', { name: 'À vista ou parcelado' });
     await user.type(within(form).getByLabelText('Valor total (R$)'), '3000');
     await user.click(within(form).getByRole('button', { name: 'Comparar as duas opções' }));
@@ -270,7 +333,7 @@ describe('Agenda', () => {
     const user = userEvent.setup();
     render(<Agenda />);
 
-    await user.click(await screen.findByRole('button', { name: 'Levar para minha agenda' }));
+    await user.click(await screen.findByRole('button', { name: 'Levar para a agenda do celular' }));
 
     expect(criar).toHaveBeenCalled();
     expect(clique).toHaveBeenCalled();
@@ -300,12 +363,13 @@ describe('MEI', () => {
   it('emite nota e cancela outra', async () => {
     falso.emitirNota.mockResolvedValue({ nota: { numero: 2, ambiente: 'teste' } });
     falso.cancelarNota.mockResolvedValue({});
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     const user = userEvent.setup();
-    render(<Mei />);
-    await screen.findByText(/Cliente A/);
+    comAvisos(<Mei />);
+    await screen.findByRole('progressbar');
 
+    await user.click(screen.getByRole('button', { name: /Emitir nota/ }));
     const form = screen.getByRole('form', { name: 'Emitir nota' });
+    expect(within(form).getByRole('button', { name: 'Digite o nome do cliente' })).toBeDisabled();
     await user.type(within(form).getByLabelText('Cliente'), 'Cliente B');
     await user.type(within(form).getByLabelText('Serviço prestado'), 'Manutenção');
     await user.type(within(form).getByLabelText('Valor (R$)'), '2.600');
@@ -313,8 +377,14 @@ describe('MEI', () => {
     expect(falso.emitirNota).toHaveBeenCalledWith({ tomadorNome: 'Cliente B', tomadorDoc: undefined, descricao: 'Manutenção', valorCents: 260_000 });
     expect(await screen.findByText(/Nota nº 2 emitida \(ambiente de teste\)/)).toBeInTheDocument();
 
+    await user.click(screen.getByRole('tab', { name: 'Notas' }));
+    await user.click(await screen.findByRole('button', { name: 'Nota nº 1, Cliente A' }));
     await user.click(screen.getByRole('button', { name: 'Cancelar nota' }));
+    expect(screen.getByText(/Cancelar não tem volta/)).toBeInTheDocument();
+    expect(falso.cancelarNota).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Sim, cancelar nº 1' }));
     expect(falso.cancelarNota).toHaveBeenCalledWith('n1');
+    expect(await screen.findByText('Nota nº 1 cancelada.')).toBeInTheDocument();
   });
 
   it('quem não é MEI vê o atalho para o perfil e o comparador lê "90.000" como noventa mil', async () => {
@@ -371,9 +441,11 @@ describe('Ajuda', () => {
   it('salva o perfil com valores em centavos e mostra campos do MEI', async () => {
     falso.salvarPerfil.mockImplementation(async (p) => ({ perfil: umPerfil(p) }));
     const user = userEvent.setup();
-    render(<Ajuda />);
+    comAvisos(<Ajuda />);
 
+    await user.click(screen.getByRole('tab', { name: /Seu perfil/ }));
     expect(await screen.findByText(/Com o perfil preenchido/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Salvar perfil' })).not.toBeInTheDocument(); // só aparece depois de mudar algo
     await user.clear(screen.getByLabelText('Renda bruta por mês (R$)'));
     await user.type(screen.getByLabelText('Renda bruta por mês (R$)'), '6.500');
     await user.click(screen.getByRole('switch', { name: 'Sou MEI' }));
@@ -389,15 +461,18 @@ describe('Ajuda', () => {
   it('pede contato a um contador (cadastro de exemplo sinalizado)', async () => {
     falso.contatar.mockResolvedValue({});
     const user = userEvent.setup();
-    render(<Ajuda />);
+    comAvisos(<Ajuda />);
 
+    await user.click(screen.getByRole('tab', { name: 'Contadores' }));
     expect(await screen.findByText('Exemplo')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Contatar' }));
-    await user.type(screen.getByLabelText(/Mensagem para/), 'Caí na malha fina, preciso de ajuda.');
+    expect(screen.getByRole('dialog', { name: /Falar com Escritório Exemplo/ })).toBeInTheDocument();
+    await user.type(screen.getByLabelText('Sua mensagem'), 'Caí na malha fina, preciso de ajuda.');
     await user.click(screen.getByRole('button', { name: 'Enviar pedido' }));
 
     expect(falso.contatar).toHaveBeenCalledWith('a1', 'outro', 'Caí na malha fina, preciso de ajuda.');
     expect(await screen.findByText(/Pedido enviado/)).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
 
