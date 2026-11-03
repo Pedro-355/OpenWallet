@@ -1,9 +1,13 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { dataLista, parseReais } from '../format';
+import { brl, dataLista, parseReais } from '../format';
 import { mvp } from '../mvpApi';
 import { Button, Iniciais, Money, OQueE, Tag } from '../ds/componentes';
 import { Icone } from '../ds/Icone';
 import { anoCorrente, Aviso, Cabecalho, Card, Erro, useAcao, useCarregar } from './comum';
+import { Folha, useFolha } from '../ux/Folha';
+import { avisos } from '../ux/avisos';
+import { CampoDinheiro } from '../ux/campos';
+import { AcaoFixa, Esqueleto, useAoVoltarParaApp, useListaCurta } from '../ux/estrutura';
 
 interface DetectorDeCodigos {
   detect(fonte: CanvasImageSource): Promise<{ rawValue: string }[]>;
@@ -11,11 +15,11 @@ interface DetectorDeCodigos {
 type ConstrutorDetector = new (opts: { formats: string[] }) => DetectorDeCodigos;
 
 /** Câmera + BarcodeDetector (Chrome/Android). Onde não existir, a pessoa cola o link ou digita a chave. */
-function LeitorQr({ onLido }: { onLido: (texto: string) => void }) {
+function LeitorQr({ onLido, autoIniciar = false }: { onLido: (texto: string) => void; autoIniciar?: boolean }) {
   const video = useRef<HTMLVideoElement>(null);
   const aoLer = useRef(onLido);
   aoLer.current = onLido;
-  const [ligado, setLigado] = useState(false);
+  const [ligado, setLigado] = useState(autoIniciar);
   const [erro, setErro] = useState('');
   const Detector = (globalThis as { BarcodeDetector?: ConstrutorDetector }).BarcodeDetector;
 
@@ -51,7 +55,7 @@ function LeitorQr({ onLido }: { onLido: (texto: string) => void }) {
   }, [ligado, Detector]);
 
   if (!Detector) {
-    return <p className="caption">Seu navegador não lê QR code direto. Use a câmera do celular e cole o link aqui embaixo.</p>;
+    return <Aviso>Este navegador não lê QR code direto. Abra a câmera do celular, toque no link que aparecer e cole aqui embaixo, ou digite a chave impressa no cupom.</Aviso>;
   }
   return (
     <div className="stack">
@@ -63,8 +67,8 @@ function LeitorQr({ onLido }: { onLido: (texto: string) => void }) {
           </Button>
         </>
       ) : (
-        <Button variant="primary" size="lg" block onClick={() => setLigado(true)}>
-          <Icone nome="qr" /> Ler QR code da nota
+        <Button variant="ink" block onClick={() => setLigado(true)}>
+          <Icone nome="camera" /> Abrir a câmera
         </Button>
       )}
       {erro && <p className="error">{erro}</p>}
@@ -76,20 +80,23 @@ export function Notas() {
   const ano = anoCorrente();
   const notas = useCarregar(() => mvp.notas());
   const cashback = useCarregar(() => mvp.cashback(ano), [ano]);
+  const leitor = useFolha();
   const [texto, setTexto] = useState('');
   const [valor, setValor] = useState('');
-  const [resultado, setResultado] = useState<{ loja: string; total: number; imposto: number } | null>(null);
   const { ocupado, erro, executar } = useAcao();
+  const lista = useListaCurta(notas.dados?.notas ?? [], 6);
+  useAoVoltarParaApp(notas.recarregar);
 
   async function registrar(conteudo: string) {
-    setResultado(null);
     const ok = await executar(async () => {
       const r = await mvp.lerNota(conteudo, parseReais(valor) ?? undefined);
-      setResultado({ loja: r.nota.emitenteNome, total: r.nota.valorCents, imposto: r.gastos.reduce((s, g) => s + g.impostoCents, 0) });
+      const imposto = r.gastos.reduce((s, g) => s + g.impostoCents, 0);
+      avisos.mostrar(`Nota de ${r.nota.emitenteNome} registrada. Cerca de ${brl(imposto)} eram impostos.`);
     });
     if (ok) {
       setTexto('');
       setValor('');
+      leitor.fechar();
       void notas.recarregar();
       void cashback.recarregar();
     }
@@ -102,66 +109,46 @@ export function Notas() {
 
   const c = cashback.dados;
   return (
-    <div className="page">
+    <div className="page com-acao">
       <Cabecalho titulo="Notas e cashback" subtitulo="Leia o QR code do cupom e o gasto entra já com o imposto." />
 
-      <Card>
-        <LeitorQr onLido={(t) => void registrar(t)} />
-        <form className="stack" onSubmit={enviar}>
-          <label>
-            Link do QR code ou chave de acesso (44 números)
-            <input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="https://… ou 3526 1011 2223 …" />
-          </label>
-          <label>
-            Valor total, se o QR code não trouxer (opcional)
-            <input inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="R$ 0,00" />
-          </label>
-          <Button variant="secondary" type="submit" disabled={ocupado || !texto.trim()}>
-            {ocupado ? 'Registrando…' : 'Registrar nota'}
-          </Button>
-        </form>
-        {resultado && (
-          <Aviso tom="ok">
-            Nota de {resultado.loja} registrada: <Money cents={resultado.total} size="sm" />, dos quais cerca de{' '}
-            <Money cents={resultado.imposto} size="sm" /> são impostos.
-          </Aviso>
-        )}
-        <Erro mensagem={erro} />
-      </Card>
+      {!c && cashback.carregando ? (
+        <Esqueleto destaque />
+      ) : (
+        <Card titulo={`Cashback da reforma em ${ano}`}>
+          <Erro mensagem={cashback.erro} onTentar={() => void cashback.recarregar()} />
+          {c && (
+            <>
+              <div className="card-head">
+                {c.elegibilidade.elegivel ? <Tag tone="positive">Sua família tem direito</Tag> : <Tag>Sem direito pelo perfil</Tag>}
+                <OQueE termo="cashback">
+                  A partir de 2027, famílias do CadÚnico com renda de até meio salário mínimo por pessoa recebem de volta parte da CBS, o novo imposto
+                  federal sobre o consumo. Nas contas de luz, água, gás e telefone, volta 100% da CBS; nas outras compras, 20%.
+                </OQueE>
+              </div>
+              {!c.perfilPreenchido && <Aviso>Para saber se sua família tem direito, que tal preencher o perfil na aba Ajuda?</Aviso>}
+              {!c.elegibilidade.elegivel && c.perfilPreenchido && <p className="body-sm">{c.elegibilidade.motivos.join(' ')}</p>}
+              <div className="valor-destaque">
+                <span className="label">{c.estimativa.vigente ? 'Estimativa de devolução no ano' : 'Quanto voltaria com as regras de 2027'}</span>
+                <Money cents={c.estimativa.potencialCents} size="lg" />
+                <span className="caption">Estimativa com a CBS em {c.estimativa.aliquotasEstimadas.cbsPct.toLocaleString('pt-BR')}%. A alíquota oficial ainda não saiu.</span>
+              </div>
+              {c.estimativa.perdidoSemCpfCents > 0 && (
+                <Aviso tom="atencao">
+                  <Money cents={-c.estimativa.perdidoSemCpfCents} size="sm" signed /> ficariam para trás em compras sem CPF na nota. Que tal pedir o
+                  CPF na nota em toda compra?
+                </Aviso>
+              )}
+            </>
+          )}
+        </Card>
+      )}
 
-      <Card titulo={`Cashback da reforma em ${ano}`}>
-        <Erro mensagem={cashback.erro} onTentar={() => void cashback.recarregar()} />
-        {c && (
-          <>
-            <div className="card-head">
-              {c.elegibilidade.elegivel ? <Tag tone="positive">Sua família tem direito</Tag> : <Tag>Sem direito pelo perfil</Tag>}
-              <OQueE termo="cashback">
-                A partir de 2027, famílias do CadÚnico com renda de até meio salário mínimo por pessoa recebem de volta parte da CBS, o novo imposto
-                federal sobre o consumo. Nas contas de luz, água, gás e telefone, volta 100% da CBS; nas outras compras, 20%.
-              </OQueE>
-            </div>
-            {!c.perfilPreenchido && <Aviso>Para saber se sua família tem direito, que tal preencher o perfil na aba Ajuda?</Aviso>}
-            {!c.elegibilidade.elegivel && c.perfilPreenchido && <p className="body-sm">{c.elegibilidade.motivos.join(' ')}</p>}
-            <div className="valor-destaque">
-              <span className="label">{c.estimativa.vigente ? 'Estimativa de devolução no ano' : 'Quanto voltaria com as regras de 2027'}</span>
-              <Money cents={c.estimativa.potencialCents} size="lg" />
-              <span className="caption">Estimativa com a CBS em {c.estimativa.aliquotasEstimadas.cbsPct.toLocaleString('pt-BR')}%. A alíquota oficial ainda não saiu.</span>
-            </div>
-            {c.estimativa.perdidoSemCpfCents > 0 && (
-              <Aviso tom="atencao">
-                <Money cents={-c.estimativa.perdidoSemCpfCents} size="sm" signed /> ficariam para trás em compras sem CPF na nota. Que tal pedir
-                o CPF na nota em toda compra?
-              </Aviso>
-            )}
-          </>
-        )}
-      </Card>
-
-      <Card titulo="Notas lidas">
+      <Card titulo="Notas lidas" acao={notas.dados && notas.dados.resumo.total > 0 ? <span className="label">{notas.dados.resumo.total}</span> : undefined}>
         <Erro mensagem={notas.erro} onTentar={() => void notas.recarregar()} />
         {notas.dados && notas.dados.notas.length === 0 && <p className="body-sm">Nenhuma nota ainda. A primeira leva poucos segundos.</p>}
         <ul className="lista">
-          {notas.dados?.notas.map((n) => (
+          {lista.visiveis.map((n) => (
             <li key={n.chave}>
               <Iniciais nome={n.emitenteNome} />
               <div className="item-texto">
@@ -177,7 +164,33 @@ export function Notas() {
             </li>
           ))}
         </ul>
+        {lista.restante > 0 && !lista.todos && (
+          <Button variant="secondary" block onClick={lista.verTodos}>
+            Ver todas as {notas.dados?.notas.length} notas
+          </Button>
+        )}
       </Card>
+
+      <AcaoFixa>
+        <Button variant="primary" size="lg" block onClick={() => leitor.abrir()}>
+          <Icone nome="qr" /> Ler QR code da nota
+        </Button>
+      </AcaoFixa>
+
+      <Folha aberta={leitor.aberta} onFechar={leitor.fechar} titulo="Registrar nota fiscal" descricao="Aponte a câmera para o QR code no pé do cupom.">
+        <LeitorQr onLido={(t) => void registrar(t)} autoIniciar />
+        <form className="stack" onSubmit={enviar}>
+          <label>
+            Ou cole o link do QR code ou a chave de acesso (44 números)
+            <input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="https://… ou 3526 1011 2223 …" inputMode="text" enterKeyHint="go" autoComplete="off" autoCapitalize="off" spellCheck={false} />
+          </label>
+          <CampoDinheiro rotulo="Valor total, se o QR code não trouxer (opcional)" value={valor} onChange={setValor} />
+          <Button variant="secondary" type="submit" block disabled={ocupado || !texto.trim()}>
+            {ocupado ? 'Registrando…' : texto.trim() ? 'Registrar nota' : 'Cole o link ou a chave para registrar'}
+          </Button>
+          <Erro mensagem={erro} />
+        </form>
+      </Folha>
     </div>
   );
 }

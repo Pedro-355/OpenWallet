@@ -78,12 +78,20 @@ describe('ExpenseForm', () => {
     expect(keys[2]).not.toBe(keys[1]);
   });
 
-  it('valor inválido não chama a API', async () => {
+  it('o campo de valor só aceita números, e sem valor não chama a API', async () => {
     const { user, valor } = setup();
     await user.type(valor, 'abc');
+    expect(valor).toHaveValue('');
     await user.click(screen.getByRole('button', { name: /adicionar gasto/i }));
-    expect(screen.getByText(/informe um valor válido/i)).toBeInTheDocument();
     expect(createExpense).not.toHaveBeenCalled();
+  });
+
+  it('formata o valor ao sair do campo e usa o teclado decimal', async () => {
+    const { user, valor } = setup();
+    expect(valor).toHaveAttribute('inputmode', 'decimal');
+    await user.type(valor, '1234,5');
+    await user.tab();
+    expect(valor).toHaveValue('1.234,50');
   });
 
   it('vendo um mês passado, a data sugerida é o último dia daquele mês', () => {

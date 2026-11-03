@@ -149,12 +149,36 @@ React 18+, em `apps/web/src/ds/componentes.tsx`, com as mesmas classes `ow-*` e 
 | [SuggestionCard](componentes/SuggestionCard.md) | A sugestão do dia: categoria, título, convite, ação, "Agora não" e "Por que essa sugestão?". |
 | [OQueE](componentes/OQueE.md) | Extensão do app: a nota "O que é isso?" que explica um termo ao lado do dado. |
 | [Iniciais](componentes/Iniciais.md) | Extensão do app: iniciais num círculo, no lugar de logos. |
+| [Folha](componentes/Folha.md) | Padrão de celular: formulários e detalhes numa folha que sobe de baixo. |
+| [CampoDinheiro e CampoDocumento](componentes/CampoDinheiro.md) | Padrão de celular: teclado certo e máscara para valores e CPF/CNPJ. |
+
+## Padrões para celular
+
+Quase todo mundo usa o OpenWallet no celular, com uma mão, em pé no ônibus ou na fila. Estes padrões valem para qualquer tela nova. O código fica em `apps/web/src/ux/`.
+
+| Padrão | Regra | No código |
+| --- | --- | --- |
+| **Ação ao alcance do polegar** | A ação principal da tela fica fixa no rodapé, logo acima das abas, em `button-lg` e `block`. É o único `primary` da tela. Quando muda a parte da tela, a ação muda junto. | `<AcaoFixa>` + `.page.com-acao` |
+| **Formulário em folha** | Formulários e detalhes abrem numa folha que sobe de baixo, sem tirar a pessoa da tela. A folha fecha pelo X, tocando fora, arrastando a alça para baixo, com Esc e com o **Voltar do Android**. | `<Folha>` e `useFolha()` |
+| **Telas curtas** | Uma tela longa vira partes, em abas internas fixas no topo ao rolar. Cada tela lembra a parte escolhida. Um contador mostra o que pede atenção (ex.: riscos de malha). | `<Segmentos>` e `useSegmento()` |
+| **Listas curtas** | Mostre os 5 ou 6 primeiros itens e um "Ver todos". A linha inteira é tocável (56px ou mais) e abre o detalhe numa folha; nada de ícones pequenos de apagar em cada linha. | `<LinhaTocavel>` e `useListaCurta()` |
+| **Desfazer em vez de "Tem certeza?"** | Apagar some na hora e mostra "Desfazer" por 5 s; só depois vai para o servidor. Ações sem volta (cancelar nota fiscal) pedem confirmação em dois passos dentro da folha, dizendo a consequência. | `comDesfazer()` |
+| **Resposta imediata** | "Paguei" e "Recebi" mudam na hora e o servidor confirma depois. Se falhar, a tela volta ao estado anterior e avisa. | `avisos.mostrar()` |
+| **Avisos rápidos** | Confirmações aparecem no pé da tela, acima da ação fixa (ou no topo, se houver folha aberta), por 3,5 s, com uma vibração curta. Erros vibram diferente. | `<Avisos>` |
+| **Teclado certo** | Dinheiro: teclado decimal, "R$" fixo e formatação ao sair do campo ("1234,5" → "1.234,50"). CPF/CNPJ: teclado numérico com máscara. Cada campo diz o que a tecla Enter faz (`enterKeyHint`). Fonte de 16px para o iPhone não dar zoom. | `<CampoDinheiro>` e `<CampoDocumento>` |
+| **Escolha com toque, não com digitação** | Poucas opções viram chips (dependentes, tipo de recibo, ano-base) em vez de campo numérico ou lista suspensa. | `<Chip>` |
+| **Botão que explica o que falta** | Desabilitado só enquanto falta algo, e o texto diz o quê ("Digite o valor recebido"). | `<Button disabled>` |
+| **Sem pular a tela** | Enquanto carrega, blocos cinza ocupam o lugar do conteúdo. | `<Esqueleto>` |
+| **Conexão instável** | Uma faixa avisa quando o celular fica sem internet. Ao voltar para o app ou a conexão voltar, os dados recarregam sozinhos. | `<AvisoConexao>` e `useAoVoltarParaApp()` |
+| **Navegação** | Trocar de aba entra no histórico (o Voltar do Android volta para a aba anterior), cada aba lembra a rolagem, e tocar na aba atual sobe para o topo. | `useAbas()` |
+| **Conversa** | No assistente, a caixa de pergunta fica fixa embaixo, como num app de mensagens, e a conversa rola até a última resposta. | `Assistente` |
+| **Menos movimento** | Quem pede menos movimento no sistema não vê animações nem sente vibração. | `prefers-reduced-motion` |
 
 ## Como o app aplica o design system
 
 | Tela | O que segue o sistema |
 | --- | --- |
-| Início | Total do mês em `amount-xl` no cartão em destaque; divisão por esfera em `primary-strong`/`chart-2`/`ink-muted` com legenda; até 3 **sugestões do dia** (prazo da agenda, CPF na nota, perfil vazio) com o aviso "A decisão é sempre sua". |
+| Início | Ação fixa "Novo gasto" (folha); gastos tocáveis com detalhe e "Apagar" com desfazer; total do mês em `amount-xl` no cartão em destaque; divisão por esfera em `primary-strong`/`chart-2`/`ink-muted` com legenda; até 3 **sugestões do dia** (prazo da agenda, CPF na nota, perfil vazio) com o aviso "A decisão é sempre sua". |
 | Notas | A única ação `primary` é "Ler QR code da nota"; status do CPF em tags; cashback perdido em `−R$` dentro de aviso de atenção. |
 | IR | Simulador com saídas em `−R$`; restituição em `+R$`; ano-base em chips; riscos de malha como tags de atenção; "O que é isso?" para malha fina. |
 | Agenda | Datas "19 nov", "Hoje"; chip "Paguei"/"Pago"; tag "Venceu"; "O que é isso?" para DAS e carnê-leão; .ics para levar à agenda do celular. |
