@@ -1,0 +1,76 @@
+/*
+ * Componentes do design system OpenWallet (docs/design-system).
+ * Mesmas classes do pacote de referência (components/bundle.css). Depende de tokens.css.
+ * As fontes (Geist e Geist Mono) são carregadas no index.html.
+ */
+
+/* Button */
+.ow-btn { font: inherit; font-weight: 600; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); padding: 0 var(--space-5); border: 1px solid transparent; border-radius: var(--radius-pill); cursor: pointer; text-decoration: none; }
+.ow-btn--md { min-height: var(--touch-min); font-size: 14px; }
+.ow-btn--lg { min-height: var(--button-lg); font-size: 16px; }
+.ow-btn--block { flex: 1 1 0; width: 100%; }
+.ow-btn--primary { background: var(--primary); color: var(--on-primary); }
+.ow-btn--ink { background: var(--ink); color: var(--on-ink); }
+.ow-btn--secondary { background: var(--surface-raised); color: var(--ink); border-color: var(--line-strong); font-weight: 500; }
+.ow-btn--ghost { background: transparent; color: var(--link); padding: 0 var(--space-2); font-weight: 500; }
+.ow-btn:disabled { background: var(--line); color: var(--ink-muted); border-color: transparent; cursor: default; }
+.ow-btn--ghost:disabled { background: transparent; }
+
+/* Chip */
+.ow-chip { font: inherit; font-size: 14px; font-weight: 500; min-height: 40px; padding: 0 var(--space-4); border-radius: var(--radius-pill); border: 1px solid var(--line-strong); background: var(--surface-raised); color: var(--ink); cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: var(--space-2); }
+.ow-chip.is-selected { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+
+/* Tag */
+.ow-tag { display: inline-flex; align-items: center; font-size: 11px; line-height: 16px; font-weight: 600; padding: 4px 10px; border-radius: var(--radius-pill); white-space: nowrap; }
+.ow-tag--neutral { background: var(--surface-sunken); color: var(--ink-soft); }
+.ow-tag--primary { background: var(--primary-soft); color: var(--primary-strong); }
+.ow-tag--positive { background: var(--positive-soft); color: var(--positive); }
+.ow-tag--attention { background: var(--attention-soft); color: var(--attention); }
+
+/* Money */
+.ow-money { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 500; white-space: nowrap; }
+.ow-money--xl { font-size: 34px; line-height: 36px; letter-spacing: -0.02em; }
+.ow-money--lg { font-size: 30px; line-height: 34px; letter-spacing: -0.02em; }
+.ow-money--md { font-size: 15px; line-height: 20px; }
+.ow-money--sm { font-size: 13px; line-height: 18px; }
+.ow-money--neutral { color: var(--ink); }
+.ow-money--positive { color: var(--positive); }
+.ow-money--negative { color: var(--negative); }
+
+/* ProgressBar */
+.ow-progress { height: 10px; border-radius: var(--radius-pill); background: var(--surface-sunken); overflow: hidden; }
+.ow-progress__fill { display: block; height: 100%; border-radius: var(--radius-pill); }
+.ow-progress--primary .ow-progress__fill { background: var(--primary); }
+.ow-progress--positive .ow-progress__fill { background: var(--positive); }
+.ow-progress--attention .ow-progress__fill { background: var(--attention); }
+.ow-progress-segs { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--space-1); }
+.ow-seg { height: 6px; border-radius: var(--radius-pill); background: var(--line-strong); }
+.ow-seg.is-done { background: var(--primary); }
+
+/* Toggle */
+.ow-toggle { position: relative; width: 52px; height: var(--touch-min); padding: 0; border: none; background: transparent; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.ow-toggle__knob { position: relative; width: 46px; height: 28px; border-radius: var(--radius-pill); background: var(--line-strong); display: block; }
+.ow-toggle__knob::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: var(--surface-raised); }
+.ow-toggle.is-on .ow-toggle__knob { background: var(--primary); }
+.ow-toggle.is-on .ow-toggle__knob::after { left: 21px; background: var(--on-primary); }
+.ow-toggle:disabled { opacity: 0.6; cursor: default; }
+
+/* Link-style button and explanatory note */
+.ow-link { font: inherit; font-size: 13px; font-weight: 500; min-height: 36px; padding: 0; border: none; background: transparent; color: var(--link); cursor: pointer; text-align: left; }
+.ow-link:hover { color: var(--primary-strong); }
+.ow-note { margin: 0; font-size: 13px; line-height: 19px; color: var(--ink-soft); background: var(--surface-sunken); border-radius: var(--radius-sm); padding: var(--space-3); }
+
+/* SuggestionCard */
+.ow-sug { background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: var(--space-4); display: flex; flex-direction: column; gap: 10px; }
+.ow-sug__top { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.ow-sug__title { margin: 0; font-size: 16px; line-height: 22px; font-weight: 600; color: var(--ink); }
+.ow-sug__body { margin: 0; font-size: 14px; line-height: 21px; color: var(--ink-soft); }
+.ow-sug__actions { display: flex; gap: var(--space-2); margin-top: 2px; }
+.ow-sug__result { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); font-size: 13px; font-weight: 500; border-radius: var(--radius-sm); padding: var(--space-2) var(--space-3); background: var(--surface-sunken); color: var(--ink-soft); }
+.ow-sug__result.is-done { background: var(--positive-soft); color: var(--positive); }
+
+/* Iniciais (no lugar de logos de terceiros) */
+.ow-iniciais { flex-shrink: 0; width: 40px; height: 40px; border-radius: 50%; background: var(--surface-sunken); color: var(--ink-soft); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; letter-spacing: 0.02em; }
+
+/* Focus */
+.ow-btn:focus-visible, .ow-chip:focus-visible, .ow-toggle:focus-visible, .ow-link:focus-visible { outline: 2px solid transparent; box-shadow: var(--focus-ring); }

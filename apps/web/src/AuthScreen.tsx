@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { UFS } from '@openwallet/tax';
 import { auth, ApiError } from './api';
 import { InstallBanner } from './InstallBanner';
+import { Button } from './ds/componentes';
 
 export function AuthScreen() {
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -29,9 +30,9 @@ export function AuthScreen() {
     <main className="auth">
       <div className="auth-card">
         <InstallBanner />
-        <p className="eyebrow">OpenWallet</p>
-        <h1>Impostômetro</h1>
-        <p className="muted">Veja quanto de cada gasto seu foi para impostos.</p>
+        <p className="overline">OpenWallet</p>
+        <h1>{mode === 'login' ? 'Que bom ver você de novo' : 'Crie sua conta'}</h1>
+        <p className="body-sm">Veja quanto imposto você paga, recupere o que é seu e fique em dia com o Leão.</p>
         <form onSubmit={submit} className="stack">
           <label>
             E-mail
@@ -58,14 +59,14 @@ export function AuthScreen() {
               </select>
             </label>
           )}
-          {error && <p className="error">{error}</p>}
-          <button className="primary" disabled={busy}>
+          {error && <p className="error" role="alert">{error}</p>}
+          <Button variant="primary" size="lg" block type="submit" disabled={busy}>
             {busy ? 'Aguarde…' : mode === 'login' ? 'Entrar' : 'Criar conta'}
-          </button>
+          </Button>
         </form>
-        <button className="link" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>
+        <Button variant="ghost" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>
           {mode === 'login' ? 'Não tem conta? Cadastre-se' : 'Já tem conta? Entrar'}
-        </button>
+        </Button>
       </div>
     </main>
   );

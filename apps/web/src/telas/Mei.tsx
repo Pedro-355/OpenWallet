@@ -1,12 +1,13 @@
 import { useState, type FormEvent } from 'react';
 import type { OpcaoRegime } from '@openwallet/tax';
-import { brl, parseReais, pct } from '../format';
+import { dataLista, parseReais, pct } from '../format';
 import { mvp } from '../mvpApi';
-import { anoCorrente, Cabecalho, Card, dataBR, Erro, useAcao, useCarregar } from './comum';
+import { Button, Chip, Iniciais, Money, OQueE, ProgressBar, Tag } from '../ds/componentes';
+import { anoCorrente, Aviso, Cabecalho, Card, Erro, useAcao, useCarregar } from './comum';
 
 export function Comparador() {
   const [fat, setFat] = useState('');
-  const [atividade, setAtividade] = useState('servicos');
+  const [atividade, setAtividade] = useState<'servicos' | 'comercio'>('servicos');
   const [opcoes, setOpcoes] = useState<OpcaoRegime[] | null>(null);
   const { ocupado, erro, executar } = useAcao();
 
@@ -19,44 +20,42 @@ export function Comparador() {
 
   return (
     <form className="stack" onSubmit={comparar} aria-label="Comparar regimes">
-      <div className="two">
-        <label>
-          Faturamento por ano (R$)
-          <input inputMode="decimal" value={fat} onChange={(e) => setFat(e.target.value)} placeholder="Ex.: 90.000" />
-        </label>
-        <label>
-          Atividade
-          <select value={atividade} onChange={(e) => setAtividade(e.target.value)}>
-            <option value="servicos">Serviços</option>
-            <option value="comercio">Comércio</option>
-          </select>
-        </label>
+      <label>
+        Faturamento por ano (R$)
+        <input inputMode="decimal" value={fat} onChange={(e) => setFat(e.target.value)} placeholder="Ex.: 90.000" />
+      </label>
+      <div className="chips" role="group" aria-label="Atividade">
+        <Chip selected={atividade === 'servicos'} onClick={() => setAtividade('servicos')}>
+          Serviços
+        </Chip>
+        <Chip selected={atividade === 'comercio'} onClick={() => setAtividade('comercio')}>
+          Comércio
+        </Chip>
       </div>
-      <button className="ghost" disabled={ocupado}>
-        Comparar
-      </button>
+      <Button variant="ink" type="submit" disabled={ocupado}>
+        Comparar regimes
+      </Button>
       <Erro mensagem={erro} />
       {opcoes && (
         <ol className="lista">
           {opcoes.map((o, i) => (
-            <li key={o.regime} className={o.permitido ? '' : 'pago'}>
-              <span className="what">
-                <span>
-                  {i === 0 && o.permitido && <span className="badge">mais barato</span>}
-                  {o.nome}
-                </span>
-                <span className="muted small">{o.permitido ? o.detalhes : o.motivo}</span>
-              </span>
+            <li key={o.regime} className={o.permitido ? '' : 'apagado'}>
+              <div className="item-texto">
+                <span>{o.nome}</span>
+                {i === 0 && o.permitido && <Tag tone="positive">Mais barato</Tag>}
+                <span className="caption">{o.permitido ? o.detalhes : o.motivo}</span>
+              </div>
               {o.permitido && (
-                <span className="amount">
-                  <strong>{brl(o.impostoAnualCents)}/ano</strong>
-                  <span className="muted small">{pct(o.cargaPct)}</span>
-                </span>
+                <div className="item-valor">
+                  <Money cents={o.impostoAnualCents} />
+                  <span className="label">por ano · {pct(o.cargaPct)}</span>
+                </div>
               )}
             </li>
           ))}
         </ol>
       )}
+      {opcoes && <p className="caption">Estimativa para comparar. Antes de mudar de regime, vale conversar com um contador.</p>}
     </form>
   );
 }
@@ -95,7 +94,7 @@ function EmitirNota({ onEmitida }: { onEmitida: () => void }) {
           <input value={tomador} onChange={(e) => setTomador(e.target.value)} />
         </label>
         <label>
-          CPF/CNPJ do cliente
+          CPF ou CNPJ do cliente
           <input inputMode="numeric" value={doc} onChange={(e) => setDoc(e.target.value)} />
         </label>
       </div>
@@ -105,16 +104,18 @@ function EmitirNota({ onEmitida }: { onEmitida: () => void }) {
       </label>
       <label>
         Valor (R$)
-        <input inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} />
+        <input inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="R$ 0,00" />
       </label>
-      <button className="primary" disabled={ocupado}>
+      <Button variant="ink" type="submit" disabled={ocupado}>
         {ocupado ? 'Emitindo…' : 'Emitir nota'}
-      </button>
-      {ok && <p className="notice ok">{ok}</p>}
+      </Button>
+      {ok && <Aviso tom="ok">{ok}</Aviso>}
       <Erro mensagem={erro} />
     </form>
   );
 }
+
+const TOM_LIMITE = { ok: 'primary', atencao: 'attention', alerta: 'attention', excedido_tolerancia: 'attention', desenquadrado: 'attention' } as const;
 
 export function Mei({ irParaPerfil }: { irParaPerfil?: () => void }) {
   const ano = anoCorrente();
@@ -128,58 +129,69 @@ export function Mei({ irParaPerfil }: { irParaPerfil?: () => void }) {
 
   return (
     <div className="page">
-      <Cabecalho titulo="MEI" subtitulo="Limite de faturamento, DAS, notas e o regime mais barato." />
+      <Cabecalho titulo="MEI" subtitulo="Limite de faturamento, DAS, notas e o regime que sai mais barato." />
       <Erro mensagem={painel.erro} onTentar={atualizar} />
       {p && !p.ativo && (
-        <p className="notice">
-          Você não marcou que é MEI no perfil.{' '}
+        <Card>
+          <p className="body-sm">Você ainda não marcou no perfil que é MEI. O comparador logo abaixo funciona mesmo assim.</p>
           {irParaPerfil && (
-            <button className="link" onClick={irParaPerfil}>
+            <Button variant="secondary" onClick={irParaPerfil}>
               Abrir perfil
-            </button>
-          )}{' '}
-          O comparador abaixo funciona mesmo assim.
-        </p>
+            </Button>
+          )}
+        </Card>
       )}
       {p && p.ativo && (
-        <Card titulo={`Faturamento de ${ano}`}>
-          <p className="big-sm">{brl(p.faturamento.totalCents)}</p>
-          <div className="meter" role="meter" aria-valuenow={p.limite.usadoPct} aria-valuemin={0} aria-valuemax={100} aria-label="Uso do limite">
-            <span className={`nivel-${p.limite.nivel}`} style={{ width: `${Math.min(100, p.limite.usadoPct)}%` }} />
+        <Card destaque>
+          <div className="valor-destaque">
+            <span className="overline">Faturamento de {ano}</span>
+            <Money cents={p.faturamento.totalCents} size="lg" />
           </div>
-          <p className="muted small">
-            {pct(p.limite.usadoPct)} de {brl(p.limite.limiteCents)} · cabe {brl(p.limite.mediaMensalDisponivelCents)}/mês até dezembro · DAS{' '}
-            {brl(p.das.totalCents)}/mês
+          <ProgressBar value={p.limite.usadoPct} label="Uso do limite do MEI" tone={TOM_LIMITE[p.limite.nivel] === 'attention' ? 'attention' : 'primary'} />
+          <p className="body-sm">
+            <Money cents={p.faturamento.totalCents} size="sm" /> de <Money cents={p.limite.limiteCents} size="sm" /> ({pct(p.limite.usadoPct)}). Ainda
+            cabem <Money cents={p.limite.mediaMensalDisponivelCents} size="sm" /> por mês até dezembro.
           </p>
-          <p className={p.limite.nivel === 'ok' ? 'muted' : 'notice'}>{p.limite.mensagem}</p>
+          {p.limite.nivel !== 'ok' ? <Aviso tom="atencao">{p.limite.mensagem}</Aviso> : <p className="caption">{p.limite.mensagem}</p>}
+          <div className="card-head">
+            <span className="body-sm">
+              DAS de <Money cents={p.das.totalCents} size="sm" /> por mês
+            </span>
+            <OQueE termo="DAS">
+              DAS é a guia mensal do MEI. O valor é fixo e já inclui o INSS (que conta para a sua aposentadoria) e o ISS ou ICMS. Vence todo dia 20.
+            </OQueE>
+          </div>
         </Card>
       )}
       {p?.ativo && (
-        <Card titulo="Emitir nota fiscal de serviço">
+        <Card titulo="Nota fiscal de serviço">
           <EmitirNota onEmitida={atualizar} />
           <ul className="lista">
             {notas.dados?.notas.map((n) => (
-              <li key={n.id} className={n.status === 'cancelada' ? 'pago' : ''}>
-                <span className="what">
+              <li key={n.id} className={n.status === 'cancelada' ? 'apagado' : ''}>
+                <Iniciais nome={n.tomadorNome} />
+                <div className="item-texto">
                   <span>
                     Nº {n.numero} · {n.tomadorNome}
                   </span>
-                  <span className="muted small">
-                    {dataBR(n.emitidaEm)} · {n.descricao}
-                    {n.status === 'cancelada' && ' · cancelada'}
+                  <span className="label">
+                    {dataLista(n.emitidaEm)} · {n.descricao}
                   </span>
-                </span>
-                <strong>{brl(n.valorCents)}</strong>
-                {n.status === 'emitida' && (
-                  <button
-                    className="ghost"
-                    onClick={() => {
-                      if (window.confirm(`Cancelar a nota nº ${n.numero}?`)) void mvp.cancelarNota(n.id).then(atualizar);
-                    }}
-                  >
-                    Cancelar
-                  </button>
-                )}
+                  {n.status === 'cancelada' && <Tag>Cancelada</Tag>}
+                </div>
+                <div className="item-valor">
+                  <Money cents={n.valorCents} />
+                  {n.status === 'emitida' && (
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        if (window.confirm(`Cancelar a nota nº ${n.numero}?`)) void mvp.cancelarNota(n.id).then(atualizar);
+                      }}
+                    >
+                      Cancelar nota
+                    </Button>
+                  )}
+                </div>
               </li>
             ))}
           </ul>

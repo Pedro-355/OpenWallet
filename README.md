@@ -3,13 +3,14 @@
 App para o brasileiro enxergar, recuperar e organizar os impostos que paga: impostômetro, leitor de nota fiscal (NFC-e), cashback da reforma tributária, simulador e prévia do IR com checagem de malha fina, agenda fiscal (DAS, carnê-leão, IPVA, IPTU), painel do MEI com emissão de NFS-e, assistente tributário e contadores.
 
 📄 **Escopo, regras e roadmap do MVP: [docs/MVP.md](docs/MVP.md)**
+🎨 **Design system (tokens, componentes, voz e tom): [docs/design-system](docs/design-system/README.md)**
 
 ## Impostômetro
 
 Mostra, para cada gasto, quanto do valor pago foi imposto: federal, estadual (ICMS, conforme a UF) e municipal (ISS).
 Os percentuais seguem a lógica da tabela IBPT usada nas notas fiscais (Lei 12.741/2012).
 
-![Tela do impostômetro](docs/impostometro.png)
+![Início do app, temas claro e escuro](docs/design-system/app-claro-escuro.png)
 
 > ⚠️ A tabela que vem no repositório é **ilustrativa**. Antes de produção, importe as tabelas oficiais (veja [Alíquotas](#alíquotas-ibpt)).
 

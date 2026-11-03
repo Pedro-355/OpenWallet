@@ -43,7 +43,7 @@ function OpenFinanceCallback({ onDone }: { onDone: (msg: string) => void }) {
   }, [onDone]);
   return (
     <main className="auth">
-      <p className="muted">Confirmando a conexão com o banco…</p>
+      <p className="body-sm">Confirmando a conexão com o banco…</p>
     </main>
   );
 }
@@ -71,7 +71,7 @@ function App() {
   }
   return (
     <>
-      {aba === 'inicio' && <Impostometro user={user} flash={flash} onFlashSeen={() => setFlash('')} />}
+      {aba === 'inicio' && <Impostometro user={user} flash={flash} onFlashSeen={() => setFlash('')} irPara={irPara} />}
       {aba === 'notas' && <Notas />}
       {aba === 'ir' && <Ir />}
       {aba === 'agenda' && <Agenda />}

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { brl, capitalize, dayLabel, lastDay, monthLong, monthShort, parseMoney, parseReais, pct, shiftMonth, todayISO } from './format';
+import { brl, capitalize, dayLabel, lastDay, monthLong, monthShort, dataExtenso, dataLista, mesAno, parseMoney, parseReais, pct, shiftMonth, todayISO } from './format';
 
 const nbsp = (s: string) => s.replace(/\s/g, ' ');
 
@@ -78,5 +78,28 @@ describe('parseReais', () => {
     ['', null],
   ])('"%s" → %s', (entrada, esperado) => {
     expect(parseReais(entrada)).toBe(esperado);
+  });
+});
+
+describe('datas no padrão do design system', () => {
+  it.each([
+    ['2026-10-28', 'Hoje'],
+    ['2026-10-27', 'Ontem'],
+    ['2026-10-03', '3 out'],
+    ['2027-01-21', '21 jan 2027'],
+  ])('dataLista(%s) → %s', (iso, texto) => {
+    expect(dataLista(iso, '2026-10-28')).toBe(texto);
+  });
+
+  it.each([
+    ['2026-10-28', 'Hoje, 28 de outubro'],
+    ['2026-03-06', '6 de março'],
+    ['2027-03-06', '6 de março de 2027'],
+  ])('dataExtenso(%s) → %s', (iso, texto) => {
+    expect(dataExtenso(iso, '2026-10-28')).toBe(texto);
+  });
+
+  it('mês como "Out 2026"', () => {
+    expect(mesAno('2026-10')).toBe('Out 2026');
   });
 });

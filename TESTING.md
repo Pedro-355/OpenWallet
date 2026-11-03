@@ -13,7 +13,7 @@
 | `unit:tax` | cálculo do imposto, tabela de alíquotas, MCC, IR/INSS, MEI/Simples, NFC-e, cashback, agenda, malha fina | `packages/tax/src/*.test.ts` | nada |
 | `unit:api` | regras puras, config, senha, assinatura de webhook, cache, cliente HTTP do banco | `apps/api/src/**/*.test.ts` | nada |
 | `unit:bank` | Banco Sandbox (consentimento, transações, webhooks) | `apps/openfinance-mock/src/*.test.ts` | nada |
-| `unit:web` | formatação, cliente da API, formulário, login, instalação | `apps/web/src/**/*.test.{ts,tsx}` | nada (jsdom) |
+| `unit:web` | formatação, cliente da API, formulário, login, instalação, componentes e tokens do design system, telas | `apps/web/src/**/*.test.{ts,tsx}` | nada (jsdom) |
 | `integration:api` | rotas HTTP, SQL, fila, worker, Open Finance de ponta a ponta | `apps/api/test/integration/` | Postgres + Redis |
 
 ## Comandos
